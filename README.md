@@ -1,3 +1,35 @@
+
+<div align="right">
+  <details>
+    <summary >🌐 Language</summary>
+    <div>
+      <div align="center">
+        <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=en">English</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=zh-CN">简体中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=zh-TW">繁體中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=ja">日本語</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=ko">한국어</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=hi">हिन्दी</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=th">ไทย</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=fr">Français</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=de">Deutsch</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=es">Español</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=it">Italiano</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=ru">Русский</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=pt">Português</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=nl">Nederlands</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=pl">Polski</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=ar">العربية</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=fa">فارسی</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=tr">Türkçe</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=vi">Tiếng Việt</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=id">Bahasa Indonesia</a>
+        | <a href="https://openaitx.github.io/view.html?user=yashgorana&project=chrome-debloat&lang=as">অসমীয়া</
+      </div>
+    </div>
+  </details>
+</div>
+
 # Chrome Debloat
 
 A tool to generate policies for Chromium-based browsers (Chrome, Brave, and Edge) that disable unnecessary features, telemetry, and bloatware while enabling some quality-of-life improvements.
