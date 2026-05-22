@@ -58,9 +58,9 @@ fn dialog_text() -> Text<'static> {
         ui_dialog::title_line("Elevated Permissions Required"),
         Line::default(),
         Line::from_iter([
-            Span::styled("Browser policies must be written at the ", ui_dialog::BODY),
+            Span::styled("Chromium policies must be written at the ", ui_dialog::BODY),
             Span::styled("system level", IMPORTANT),
-            Span::styled(" before they take effect.", ui_dialog::BODY),
+            Span::styled(" for them to take effect.", ui_dialog::BODY),
         ]),
         Line::default(),
         restart_line(),
@@ -72,21 +72,15 @@ fn restart_line() -> Line<'static> {
     Line::from_iter([
         Span::styled("Restart this app with ", ui_dialog::BODY),
         Span::styled("sudo", IMPORTANT),
-        Span::styled(
-            " before applying or uninstalling policies.",
-            ui_dialog::BODY,
-        ),
+        Span::styled(".", ui_dialog::BODY),
     ])
 }
 
 #[cfg(target_os = "windows")]
 fn restart_line() -> Line<'static> {
     Line::from_iter([
-        Span::styled("Approve the ", ui_dialog::BODY),
-        Span::styled("UAC prompt", IMPORTANT),
-        Span::styled(
-            " before applying or uninstalling policies.",
-            ui_dialog::BODY,
-        ),
+        Span::styled("Restart and allow this app to ", ui_dialog::BODY),
+        Span::styled("make changes to this device", IMPORTANT),
+        Span::styled(".", ui_dialog::BODY),
     ])
 }
