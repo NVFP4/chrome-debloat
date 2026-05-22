@@ -47,6 +47,7 @@ struct RowFormat {
     marker_style: Style,
     key_style: Style,
     value_style: Style,
+    extension_name_style: Style,
 }
 
 struct ContentRow {
@@ -523,7 +524,10 @@ fn child_value_display_row(
             Span::raw(" "),
             Span::styled(value.child_label().to_owned(), row_format.value_style),
             Span::raw(" "),
-            Span::styled(format!("({extension_name})"), EXTENSION_NAME),
+            Span::styled(
+                format!("({extension_name})"),
+                row_format.extension_name_style,
+            ),
         ])),
         None => ContentRow::left(Line::from_iter([
             Span::raw("  ".repeat(indent)),
@@ -587,6 +591,7 @@ impl RowFormat {
             marker_style: APPLIED_MARK,
             key_style: KEY,
             value_style: VALUE,
+            extension_name_style: EXTENSION_NAME,
         }
     }
 
@@ -596,6 +601,7 @@ impl RowFormat {
             marker_style: ADDED,
             key_style: ADDED,
             value_style: ADDED,
+            extension_name_style: EXTENSION_NAME,
         }
     }
 
@@ -605,6 +611,7 @@ impl RowFormat {
             marker_style: MODIFIED,
             key_style: MODIFIED,
             value_style: MODIFIED,
+            extension_name_style: EXTENSION_NAME,
         }
     }
 
@@ -614,6 +621,7 @@ impl RowFormat {
             marker_style: DELETED,
             key_style: DELETED,
             value_style: DELETED,
+            extension_name_style: EXTENSION_NAME,
         }
     }
 
@@ -623,6 +631,7 @@ impl RowFormat {
             marker_style: EMPTY,
             key_style: EMPTY,
             value_style: EMPTY,
+            extension_name_style: EMPTY,
         }
     }
 

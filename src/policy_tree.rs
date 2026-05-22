@@ -120,6 +120,7 @@ enum RowTarget {
         path: Vec<PathSegment>,
         current_index: Option<usize>,
         restore_index: usize,
+        restore_value: PolicyValue,
     },
     Display {
         key: String,
@@ -171,6 +172,14 @@ struct ListItemInsert<'a> {
     value: PolicyValue,
 }
 
+struct DisplayListItem<'a> {
+    value: &'a PolicyValue,
+    status: RowStatus,
+    current_index: Option<usize>,
+    restore_index: usize,
+    restore_value: PolicyValue,
+}
+
 #[derive(Clone, Copy)]
 struct PolicyValues<'a> {
     baseline: Option<&'a PolicyValue>,
@@ -186,6 +195,7 @@ impl PolicyTree {
         current: &PolicySet,
     ) -> Self {
         let groups = ordered_groups(manifest, browser);
+        let preset_defaults = manifest.balanced_preset(browser);
         let active_keys = active_group_keys(manifest, browser);
         let custom_keys = custom_keys(&active_keys, baseline, current);
         let context = BuildContext { manifest, browser };
@@ -228,7 +238,7 @@ impl PolicyTree {
                     PolicyValues {
                         baseline: baseline.get(&setting.key),
                         current: current.get(&setting.key),
-                        default: Some(&setting.value),
+                        default: preset_defaults.get(&setting.key).or(Some(&setting.value)),
                     },
                 );
             }
@@ -498,6 +508,7 @@ pub(crate) fn toggle_policy_at(
             path,
             current_index: None,
             restore_index,
+            ..
         } => {
             let baseline_values = list_parent(baseline, key, path);
             insert_list_item(
@@ -769,7 +780,7 @@ fn target_policy_value<'a>(
     browser: Browser,
     baseline: &'a PolicySet,
     current: &'a PolicySet,
-    target: &RowTarget,
+    target: &'a RowTarget,
 ) -> Option<&'a PolicyValue> {
     match target {
         RowTarget::Policy { key } => current
@@ -788,13 +799,10 @@ fn target_policy_value<'a>(
             ..
         } => list_parent(current, key, path)?.get(*index),
         RowTarget::ListItem {
-            key,
-            path,
             current_index: None,
-            restore_index,
-        } => list_parent(baseline, key, path)
-            .or_else(|| manifest_list_parent(manifest, browser, key, path))?
-            .get(*restore_index),
+            restore_value,
+            ..
+        } => Some(restore_value),
         RowTarget::Group(_) => None,
     }
 }
@@ -814,15 +822,6 @@ fn manifest_path_value<'a>(
     path: &[PathSegment],
 ) -> Option<&'a PolicyValue> {
     path_value(manifest_policy_value(manifest, browser, key)?, path)
-}
-
-fn manifest_list_parent<'a>(
-    manifest: &'a Manifest,
-    browser: Browser,
-    key: &str,
-    path: &[PathSegment],
-) -> Option<&'a [PolicyValue]> {
-    manifest_path_value(manifest, browser, key, path)?.as_list()
 }
 
 fn path_value<'a>(value: &'a PolicyValue, path: &[PathSegment]) -> Option<&'a PolicyValue> {
@@ -913,40 +912,25 @@ fn push_child_rows<'a>(
         child.values.current,
         child.values.default,
     ) {
-        (None, None, Some(PolicyValue::List(default))) => {
-            for (index, value) in default.iter().enumerate() {
-                rows.push(PolicyTreeRow::value_row(
-                    child.indent,
-                    value,
-                    RowStatus::NotApplied,
-                    extension_name(context.manifest, context.browser, child.top_key, value),
-                    RowTarget::ListItem {
-                        key: child.top_key.to_owned(),
-                        path: child.path.clone(),
-                        current_index: None,
-                        restore_index: index,
-                    },
-                ));
-            }
-        }
-        (baseline, current, _) if value_is_list(baseline) || value_is_list(current) => {
+        (baseline, current, default)
+            if value_is_list(baseline) || value_is_list(current) || value_is_list(default) =>
+        {
             let baseline = baseline.and_then(PolicyValue::as_list);
             let current = current.and_then(PolicyValue::as_list);
-            for item in diff::list_items(baseline, current) {
-                let restore_index = item
-                    .baseline_index
-                    .or(item.current_index)
-                    .unwrap_or_default();
+            let default = default.and_then(PolicyValue::as_list);
+
+            for item in display_list_items(baseline, current, default) {
                 let target = RowTarget::ListItem {
                     key: child.top_key.to_owned(),
                     path: child.path.clone(),
                     current_index: item.current_index,
-                    restore_index,
+                    restore_index: item.restore_index,
+                    restore_value: item.restore_value,
                 };
                 rows.push(PolicyTreeRow::value_row(
                     child.indent,
                     item.value,
-                    item.status.into(),
+                    item.status,
                     extension_name(context.manifest, context.browser, child.top_key, item.value),
                     target,
                 ));
@@ -1052,6 +1036,56 @@ fn row_status(values: PolicyValues<'_>) -> RowStatus {
         (None, None, Some(_)) => RowStatus::NotApplied,
         (baseline, current, _) => diff::status(baseline, current).into(),
     }
+}
+
+fn display_list_items<'a>(
+    baseline: Option<&'a [PolicyValue]>,
+    current: Option<&'a [PolicyValue]>,
+    default: Option<&'a [PolicyValue]>,
+) -> Vec<DisplayListItem<'a>> {
+    let mut items = diff::list_items(baseline, current)
+        .into_iter()
+        .map(|item| DisplayListItem {
+            value: item.value,
+            status: item.status.into(),
+            current_index: item.current_index,
+            restore_index: item
+                .baseline_index
+                .or(item.current_index)
+                .unwrap_or_default(),
+            restore_value: item.value.clone(),
+        })
+        .collect::<Vec<_>>();
+    let mut visible_counts = list_value_counts(items.iter().map(|item| item.value));
+
+    for (default_index, default_value) in default.unwrap_or_default().iter().enumerate() {
+        let count = visible_counts.entry(default_value.clone()).or_default();
+        if *count > 0 {
+            *count -= 1;
+            continue;
+        }
+
+        items.push(DisplayListItem {
+            value: default_value,
+            status: RowStatus::NotApplied,
+            current_index: None,
+            restore_index: default_index,
+            restore_value: default_value.clone(),
+        });
+    }
+
+    items
+}
+
+fn list_value_counts<'a>(
+    values: impl IntoIterator<Item = &'a PolicyValue>,
+) -> BTreeMap<PolicyValue, usize> {
+    let mut counts = BTreeMap::new();
+    for value in values {
+        *counts.entry(value.clone()).or_default() += 1;
+    }
+
+    counts
 }
 
 fn policy_search_text(key: &str, value: &PolicyValueSummary) -> String {
@@ -1870,6 +1904,7 @@ mod tests {
                 "group:Extensions",
                 "policy:ExtensionInstallForcelist",
                 "value:cjpalhdlnbpafiamejdnhcphjbkeiagm",
+                "value:ddkjiahejlhfcafbddmgiahcphecmpfh",
             ],
         );
 
@@ -1936,6 +1971,7 @@ mod tests {
                 path: Vec::new(),
                 current_index: Some(indent),
                 restore_index: indent,
+                restore_value: raw_value.clone(),
             },
         )
     }

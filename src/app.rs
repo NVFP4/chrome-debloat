@@ -20,6 +20,8 @@ pub struct App {
     tui: TuiState,
     policy_tree_cache: Option<PolicyTreeCache>,
     visible_policy_cache: Option<VisiblePolicyCache>,
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    system_policy_requires_elevation: bool,
     should_quit: bool,
 }
 
@@ -104,6 +106,8 @@ impl App {
             )
         });
         browsers.sort_by_key(|b| (!b.detected(), !b.has_policy(), b.browser.name()));
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        let system_policy_requires_elevation = system_policy_requires_elevation();
 
         let active_browser = browsers[0].browser;
         let mut app = Self {
@@ -113,6 +117,8 @@ impl App {
             tui: TuiState::default(),
             policy_tree_cache: None,
             visible_policy_cache: None,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            system_policy_requires_elevation,
             should_quit: false,
         };
         app.move_policy_cursor_to_start();
@@ -344,6 +350,11 @@ impl App {
 
     pub const fn should_quit(&self) -> bool {
         self.should_quit
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    const fn system_policy_requires_elevation(&self) -> bool {
+        self.system_policy_requires_elevation
     }
 
     pub fn handle_action(&mut self, action: Action) -> bool {
@@ -974,7 +985,7 @@ impl App {
 
     fn open_uninstall_dialog(&mut self) -> bool {
         #[cfg(any(target_os = "linux", target_os = "windows"))]
-        if system_policy_requires_elevation() {
+        if self.system_policy_requires_elevation() {
             return self.open_dialog(DialogKind::ElevatedPermissionsRequired);
         }
 
@@ -1063,7 +1074,7 @@ impl App {
 
     fn open_apply_dialog(&mut self) -> bool {
         #[cfg(any(target_os = "linux", target_os = "windows"))]
-        if self.active_browser_state().is_dirty() && system_policy_requires_elevation() {
+        if self.active_browser_state().is_dirty() && self.system_policy_requires_elevation() {
             return self.open_dialog(DialogKind::ElevatedPermissionsRequired);
         }
 
@@ -1120,7 +1131,7 @@ impl App {
 
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     fn open_elevation_dialog_if_needed(&mut self) -> bool {
-        if !system_policy_requires_elevation() {
+        if !self.system_policy_requires_elevation() {
             return false;
         }
 
@@ -1180,7 +1191,7 @@ impl App {
         }
 
         #[cfg(any(target_os = "linux", target_os = "windows"))]
-        if system_policy_requires_elevation() {
+        if self.system_policy_requires_elevation() {
             return self.open_dialog(DialogKind::ElevatedPermissionsRequired);
         }
 
@@ -1235,7 +1246,7 @@ impl App {
         }
 
         #[cfg(any(target_os = "linux", target_os = "windows"))]
-        if system_policy_requires_elevation() {
+        if self.system_policy_requires_elevation() {
             return self.open_dialog(DialogKind::ElevatedPermissionsRequired);
         }
 

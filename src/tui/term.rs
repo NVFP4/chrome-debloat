@@ -2,13 +2,9 @@ use std::io::{self, Stdout};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use crossterm::event::{
-    DisableBracketedPaste,
-    DisableMouseCapture,
-    EnableBracketedPaste,
-    EnableMouseCapture,
-};
+use crossterm::event::{DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste};
 use crossterm::execute;
+use crossterm::style::Print;
 use crossterm::terminal::{
     EnterAlternateScreen,
     LeaveAlternateScreen,
@@ -23,6 +19,8 @@ use crate::app::App;
 
 pub type TuiTerminal = Terminal<CrosstermBackend<Stdout>>;
 const TICK_RATE: Duration = Duration::from_secs(1);
+const ENABLE_ALTERNATE_SCROLL: &str = "\x1b[?1007h";
+const DISABLE_ALTERNATE_SCROLL: &str = "\x1b[?1007l";
 
 pub fn install_panic_hook() {
     let hook = std::panic::take_hook();
@@ -33,6 +31,7 @@ pub fn install_panic_hook() {
         let mut stdout = io::stdout();
         let _ = execute!(
             stdout,
+            Print(DISABLE_ALTERNATE_SCROLL),
             LeaveAlternateScreen,
             DisableMouseCapture,
             DisableBracketedPaste
@@ -49,7 +48,7 @@ pub fn init() -> Result<TuiTerminal> {
     if let Err(error) = execute!(
         stdout,
         EnterAlternateScreen,
-        EnableMouseCapture,
+        Print(ENABLE_ALTERNATE_SCROLL),
         EnableBracketedPaste
     ) {
         let _ = restore_stdout();
@@ -106,6 +105,7 @@ fn restore(terminal: &mut TuiTerminal) -> Result<()> {
     let raw_mode_result = disable_raw_mode().context("disable terminal raw mode");
     let screen_result = execute!(
         terminal.backend_mut(),
+        Print(DISABLE_ALTERNATE_SCROLL),
         LeaveAlternateScreen,
         DisableMouseCapture,
         DisableBracketedPaste
@@ -125,6 +125,7 @@ fn restore_stdout() -> Result<()> {
     let mut stdout = io::stdout();
     let screen_result = execute!(
         stdout,
+        Print(DISABLE_ALTERNATE_SCROLL),
         LeaveAlternateScreen,
         DisableMouseCapture,
         DisableBracketedPaste

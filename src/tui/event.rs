@@ -41,11 +41,18 @@ pub fn read_action(app: &App, tick_rate: Duration) -> Result<Action> {
     }
 
     match event::read().context("read terminal event")? {
-        Event::Key(key_event) => Ok(key_to_action(
-            key_event,
-            app.dialog_input(),
-            app.policy_input_mode(),
-        )),
+        Event::Key(key_event) => {
+            #[cfg(target_os = "windows")]
+            if windows_paste_key(key_event) && app.input_active() {
+                return Ok(crate::windows::clipboard_text().map_or(Action::Noop, Action::Paste));
+            }
+
+            Ok(key_to_action(
+                key_event,
+                app.dialog_input(),
+                app.policy_input_mode(),
+            ))
+        }
         Event::Mouse(mouse_event) => Ok(mouse_to_action(mouse_event, app)),
         Event::Resize(_, _) => Ok(Action::Redraw),
         Event::Paste(text) => Ok(Action::Paste(text)),
@@ -104,6 +111,20 @@ fn key_to_action(
         }
         _ => Action::Noop,
     }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_paste_key(key_event: KeyEvent) -> bool {
+    if key_event.kind == KeyEventKind::Release {
+        return false;
+    }
+
+    let ctrl_v = key_event.modifiers.contains(KeyModifiers::CONTROL)
+        && matches!(key_event.code, KeyCode::Char('v' | 'V'));
+    let shift_insert =
+        key_event.modifiers.contains(KeyModifiers::SHIFT) && key_event.code == KeyCode::Insert;
+
+    ctrl_v || shift_insert
 }
 
 fn policy_edit_key_to_action(key_event: KeyEvent, mode: PolicyInputMode) -> Action {
@@ -187,8 +208,23 @@ fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput) -> Action {
 }
 
 fn mouse_to_action(mouse_event: MouseEvent, app: &App) -> Action {
-    if !matches!(mouse_event.kind, MouseEventKind::Down(MouseButton::Left)) {
-        return Action::Noop;
+    match mouse_event.kind {
+        MouseEventKind::ScrollUp => {
+            return match app.dialog_input().map(|dialog| dialog.kind) {
+                Some(DialogKind::Help) => help_scroll_action(-1),
+                Some(_) => Action::Noop,
+                None => Action::MovePolicyCursor(-1),
+            };
+        }
+        MouseEventKind::ScrollDown => {
+            return match app.dialog_input().map(|dialog| dialog.kind) {
+                Some(DialogKind::Help) => help_scroll_action(1),
+                Some(_) => Action::Noop,
+                None => Action::MovePolicyCursor(1),
+            };
+        }
+        MouseEventKind::Down(MouseButton::Left) => {}
+        _ => return Action::Noop,
     }
 
     if let Some(dialog) = app.dialog_input() {
