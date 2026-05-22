@@ -2,6 +2,8 @@ use std::io::{self, Stdout};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+#[cfg(target_os = "windows")]
+use crossterm::event::EnableMouseCapture;
 use crossterm::event::{DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste};
 use crossterm::execute;
 use crossterm::style::Print;
@@ -19,6 +21,7 @@ use crate::app::App;
 
 pub type TuiTerminal = Terminal<CrosstermBackend<Stdout>>;
 const TICK_RATE: Duration = Duration::from_secs(1);
+#[cfg(not(target_os = "windows"))]
 const ENABLE_ALTERNATE_SCROLL: &str = "\x1b[?1007h";
 const DISABLE_ALTERNATE_SCROLL: &str = "\x1b[?1007l";
 
@@ -45,12 +48,7 @@ pub fn init() -> Result<TuiTerminal> {
     enable_raw_mode().context("enable terminal raw mode")?;
 
     let mut stdout = io::stdout();
-    if let Err(error) = execute!(
-        stdout,
-        EnterAlternateScreen,
-        Print(ENABLE_ALTERNATE_SCROLL),
-        EnableBracketedPaste
-    ) {
+    if let Err(error) = enter_terminal_screen(&mut stdout) {
         let _ = restore_stdout();
         return Err(error).context("enter alternate terminal screen");
     }
@@ -68,6 +66,26 @@ pub fn init() -> Result<TuiTerminal> {
             }
         }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn enter_terminal_screen(stdout: &mut Stdout) -> io::Result<()> {
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        EnableMouseCapture,
+        EnableBracketedPaste
+    )
+}
+
+#[cfg(not(target_os = "windows"))]
+fn enter_terminal_screen(stdout: &mut Stdout) -> io::Result<()> {
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        Print(ENABLE_ALTERNATE_SCROLL),
+        EnableBracketedPaste
+    )
 }
 
 pub fn run(mut terminal: TuiTerminal, app: &mut App) -> Result<()> {
