@@ -1,8 +1,8 @@
 [package]
 name = "chrome-debloat"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
-repository = "https://github.com/yashgorana/chrome-debloat"
+repository = "https://github.com/NVFP4/chrome-debloat"
 
 [dependencies]
 anyhow = "1.0.102"

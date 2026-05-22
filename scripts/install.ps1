@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$script:Repo = "yashgorana/chrome-debloat"
+$script:Repo = "NVFP4/chrome-debloat"
 $script:Binary = "chrome-debloat.exe"
 $script:Asset = ""
 $script:Url = ""

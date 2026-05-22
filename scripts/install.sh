@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-repo="yashgorana/chrome-debloat"
+repo="NVFP4/chrome-debloat"
 binary="chrome-debloat"
 tmpdir=""
 platform=""

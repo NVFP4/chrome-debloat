@@ -50,7 +50,7 @@ curl https://debloat.yashg.dev/install.sh | sh
 irm https://debloat.yashg.dev/install.ps1 | iex
 ```
 
-Or download the binary from the [latest GitHub release](https://github.com/yashgorana/chrome-debloat/releases/latest) and run it directly.
+Or download the binary from the [latest GitHub release](https://github.com/NVFP4/chrome-debloat/releases/latest) and run it directly.
 
 ## Usage
 
