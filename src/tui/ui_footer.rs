@@ -8,7 +8,7 @@ use super::styles;
 use super::ui_text::{blank, join_lines, render_space_between};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const REPORT_ISSUE: &str = "report issue";
+pub(super) const REPORT_ISSUE: &str = "report issue";
 const INPUT_FOOTER: Style = Style::new().bg(Color::Cyan);
 const INPUT_TEXT: Style = Style::new().fg(Color::Black).bold();
 
@@ -67,14 +67,16 @@ fn normal_footer_lines(
 }
 
 pub(super) fn report_issue_hit(area: Rect, app: &crate::app::App, column: u16, row: u16) -> bool {
-    if app.input_active() || row != area.bottom().saturating_sub(1) {
-        return false;
+    report_issue_link_area(area, app)
+        .is_some_and(|area| row == area.y && (area.x..area.right()).contains(&column))
+}
+
+pub(super) fn report_issue_link_area(area: Rect, app: &crate::app::App) -> Option<Rect> {
+    if app.input_active() {
+        return None;
     }
 
-    let row_area = bottom_row(area).inner(Margin {
-        horizontal: 1,
-        vertical: 0,
-    });
+    let row_area = footer_row_area(area);
     let (left, right) = footer_lines(row_area.width, app);
     let right_width = right.width();
     let left_width = left.width();
@@ -87,15 +89,26 @@ pub(super) fn report_issue_hit(area: Rect, app: &crate::app::App, column: u16, r
                 <= usize::from(row_area.width));
 
     if !right_visible {
-        return false;
+        return None;
     }
 
     let start = row_area
         .right()
         .saturating_sub(right_width.min(usize::from(u16::MAX)) as u16);
-    let end = start.saturating_add(issue_width.min(usize::from(u16::MAX)) as u16);
 
-    (start..end).contains(&column)
+    Some(Rect::new(
+        start,
+        row_area.y,
+        issue_width.min(usize::from(u16::MAX)) as u16,
+        1,
+    ))
+}
+
+fn footer_row_area(area: Rect) -> Rect {
+    bottom_row(area).inner(Margin {
+        horizontal: 1,
+        vertical: 0,
+    })
 }
 
 fn bottom_row(area: Rect) -> Rect {

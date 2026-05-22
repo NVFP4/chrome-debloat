@@ -10,7 +10,7 @@ use crate::policy_tree::{EditablePolicyValue, PolicyTree, PolicyTreeRowKind, Row
 use crate::tui::action::Action;
 use crate::tui::event::{DialogInput, PolicyInputMode};
 
-const REPORT_ISSUE_URL: &str = env!("CARGO_PKG_REPOSITORY");
+pub(crate) const REPORT_ISSUE_URL: &str = env!("CARGO_PKG_REPOSITORY");
 
 #[derive(Debug)]
 pub struct App {
