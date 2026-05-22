@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use windows_registry::{Key, LOCAL_MACHINE, Type, Value as RegistryValue};
 
 use super::errors::{PolicyReadError, PolicyWriteError};
-use super::writer::{PolicyWrite, PolicyWriteResult};
+use super::writer::{PolicyWrite, PolicyWriteResult, write_file_atomically};
 use super::{BrowserPolicy, PolicyLocation, PolicyReadResult, PolicySet, PolicyValue};
 use crate::chromium::Browser;
 
@@ -27,6 +28,21 @@ pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
         target: registry_location(root_key),
         policy_count: policies.len(),
     })
+}
+
+pub fn export(browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
+    let contents = registry_file_contents(browser, policies)?;
+    let contents = registry_file_bytes(&contents);
+    write_file_atomically(path, &contents)?;
+
+    Ok(PolicyWrite {
+        target: PolicyLocation::File(path.to_path_buf()),
+        policy_count: policies.len(),
+    })
+}
+
+pub fn export_file_extension() -> &'static str {
+    "reg"
 }
 
 pub fn uninstall(browser: Browser) -> PolicyWriteResult {
@@ -253,6 +269,16 @@ fn registry_file_contents(
 
     lines.push(String::new());
     Ok(lines.join("\r\n"))
+}
+
+fn registry_file_bytes(contents: &str) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(2 + contents.len() * 2);
+    bytes.extend_from_slice(&[0xff, 0xfe]);
+    for unit in contents.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+
+    bytes
 }
 
 fn append_registry_file_key(

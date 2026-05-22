@@ -6,6 +6,7 @@ use super::ui_sudo;
 use super::{
     ui_apply,
     ui_content,
+    ui_export,
     ui_filter,
     ui_footer,
     ui_header,
@@ -56,6 +57,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
         match dialog.kind {
             DialogKind::Help => ui_help::render(frame, area, app),
             DialogKind::ConfirmApply => ui_apply::render(frame, area, app),
+            DialogKind::ExportFile => ui_export::render(frame, area, app),
             DialogKind::ConfirmQuit => ui_quit::render(frame, area, app),
             DialogKind::ConfirmRevert => ui_revert::render(frame, area, app),
             DialogKind::ConfirmUninstall => ui_uninstall::render(frame, area, app),

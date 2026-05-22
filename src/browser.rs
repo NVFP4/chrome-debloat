@@ -1,4 +1,3 @@
-#[cfg(target_os = "macos")]
 use std::path::Path;
 
 use crate::chromium::Browser;
@@ -212,6 +211,15 @@ impl BrowserState {
         self.policy_error = None;
 
         Ok(ApplyResult::Applied)
+    }
+
+    pub fn export_policy_file(&self, path: &Path) -> Result<policy::PolicyWrite, String> {
+        let Some(policy) = &self.policy else {
+            return Err("no policy is available to save".to_owned());
+        };
+
+        let current = self.edits.current(&policy.policies);
+        policy::export(self.browser, current, path).map_err(|error| error.to_string())
     }
 
     pub fn refresh_awaiting_install(&mut self) -> bool {

@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::errors::{PolicyReadError, PolicyWriteError};
 use super::writer::{PolicyWrite, PolicyWriteResult, write_file_atomically};
@@ -24,6 +24,16 @@ pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
     })
 }
 
+pub fn export(_browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
+    let contents = json::policy_set_to_bytes(policies)?;
+    write_file_atomically(path, &contents)?;
+
+    Ok(PolicyWrite {
+        target: PolicyLocation::File(path.to_path_buf()),
+        policy_count: policies.len(),
+    })
+}
+
 pub fn uninstall(browser: Browser) -> PolicyWriteResult {
     let path = policy_path(browser);
     match fs::remove_file(&path) {
@@ -41,6 +51,10 @@ pub fn uninstall(browser: Browser) -> PolicyWriteResult {
         target: PolicyLocation::File(path),
         policy_count: 0,
     })
+}
+
+pub fn export_file_extension() -> &'static str {
+    "json"
 }
 
 pub fn managed_location(browser: Browser) -> PolicyLocation {

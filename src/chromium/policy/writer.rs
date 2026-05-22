@@ -4,6 +4,7 @@ use std::io::{self, Write};
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use tempfile::{Builder as TempFileBuilder, NamedTempFile};
 
@@ -29,6 +30,19 @@ pub struct PolicyWrite {
 
 pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
     platform::write(browser, policies)
+}
+
+pub fn export(browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
+    platform::export(browser, policies, path)
+}
+
+pub fn export_file_name(browser: Browser) -> String {
+    format!(
+        "{}-debloat-{}.{}",
+        browser.slug(),
+        export_timestamp(),
+        platform::export_file_extension(),
+    )
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -91,6 +105,13 @@ fn temporary_file_prefix(file_name: &OsStr) -> OsString {
     prefix.push(file_name);
     prefix.push(".");
     prefix
+}
+
+fn export_timestamp() -> String {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs())
+        .to_string()
 }
 
 fn write_and_sync_file(file: &mut NamedTempFile, contents: &[u8]) -> Result<(), PolicyWriteError> {

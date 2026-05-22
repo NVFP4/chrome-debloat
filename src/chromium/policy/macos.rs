@@ -26,6 +26,20 @@ pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
     })
 }
 
+pub fn export(browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
+    let contents = mobileconfig_bytes(browser, policies)?;
+    write_file_atomically(path, &contents)?;
+
+    Ok(PolicyWrite {
+        target: PolicyLocation::File(path.to_path_buf()),
+        policy_count: policies.len(),
+    })
+}
+
+pub fn export_file_extension() -> &'static str {
+    "mobileconfig"
+}
+
 pub fn managed_location(browser: Browser) -> PolicyLocation {
     PolicyLocation::File(policy_path(browser))
 }

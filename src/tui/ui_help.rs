@@ -9,7 +9,7 @@ use super::ui_dialog::{self, DialogLayout, DialogRender};
 use super::ui_text::{blank, join_lines};
 use crate::app::App;
 
-pub const HELP_LINE_COUNT: u16 = 29;
+pub const HELP_LINE_COUNT: u16 = 30;
 const LAYOUT: DialogLayout = DialogLayout {
     width_percent: 80,
     min_width: 48,
@@ -67,6 +67,7 @@ fn help_text() -> Text<'static> {
             Line::default(),
             header_line("Global Actions"),
             binding_line("      a", "Apply changes"),
+            binding_line("      S", "Save policy file"),
             binding_line("      z", "Undo last change"),
             binding_line("      r", "Redo last change"),
             binding_line("      R", "Revert current changes to baseline"),

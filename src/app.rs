@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 
 use crate::browser::{ApplyResult, BrowserState};
@@ -73,6 +75,7 @@ impl FilterState {
 pub struct DialogState {
     pub kind: DialogKind,
     pub status: Option<String>,
+    pub export_path: Option<PathBuf>,
     pub focused_button: usize,
     pub scroll: u16,
 }
@@ -81,6 +84,7 @@ pub struct DialogState {
 pub enum DialogKind {
     Help,
     ConfirmApply,
+    ExportFile,
     ConfirmQuit,
     ConfirmUninstall,
     ConfirmRevert,
@@ -359,9 +363,11 @@ impl App {
             Action::ConfirmUninstall => self.confirm_uninstall(),
             Action::InputFilter(character) => self.input_filter(character),
             Action::InputPolicyEdit(character) => self.input_policy_edit(character),
+            Action::LocateExportFile => self.locate_export_file(),
             Action::ActivateDialogButton => self.activate_dialog_button(),
             Action::MoveDialogFocus(delta) => self.move_dialog_focus(delta),
             Action::OpenApplyDialog => self.open_apply_dialog(),
+            Action::OpenExportDialog => self.open_export_dialog(),
             Action::OpenReportIssue => self.open_report_issue(),
             Action::OpenRevertDialog => self.open_revert_dialog(),
             Action::OpenUninstallDialog => self.open_uninstall_dialog(),
@@ -987,6 +993,7 @@ impl App {
         match (kind, focused_button) {
             (DialogKind::Help, _) => self.close_dialog(),
             (DialogKind::ConfirmApply, 0) => self.confirm_apply(),
+            (DialogKind::ExportFile, 0) => self.locate_export_file(),
             (DialogKind::ConfirmQuit, 0) => self.confirm_quit(),
             (DialogKind::ConfirmUninstall, 0) => self.confirm_uninstall(),
             (DialogKind::ConfirmRevert, 0) => self.confirm_revert(),
@@ -1034,6 +1041,11 @@ impl App {
     fn dialog_primary_enabled(&self, kind: DialogKind) -> bool {
         match kind {
             DialogKind::Help => false,
+            DialogKind::ExportFile => self
+                .tui
+                .dialog
+                .as_ref()
+                .is_some_and(|dialog| dialog.export_path.is_some()),
             DialogKind::ConfirmQuit => self.has_pending_changes(),
             DialogKind::ConfirmApply | DialogKind::ConfirmRevert => {
                 self.active_browser_state().is_dirty()
@@ -1051,6 +1063,54 @@ impl App {
         }
 
         self.open_dialog(DialogKind::ConfirmApply)
+    }
+
+    fn open_export_dialog(&mut self) -> bool {
+        let path = PathBuf::from(self.default_export_path());
+        let result = self.active_browser_state().export_policy_file(&path);
+        let (status, export_path) = match result {
+            Ok(_) => (None, Some(path)),
+            Err(error) => (Some(error), None),
+        };
+        self.clear_policy_editors();
+        self.tui.dialog = Some(DialogState {
+            kind: DialogKind::ExportFile,
+            status,
+            export_path,
+            focused_button: 0,
+            scroll: 0,
+        });
+        true
+    }
+
+    fn locate_export_file(&mut self) -> bool {
+        let Some(path) = self
+            .tui
+            .dialog
+            .as_ref()
+            .filter(|dialog| dialog.kind == DialogKind::ExportFile)
+            .and_then(|dialog| dialog.export_path.clone())
+        else {
+            return false;
+        };
+
+        match crate::opener::locate_file(&path) {
+            Ok(()) => true,
+            Err(error) => {
+                if let Some(dialog) = &mut self.tui.dialog {
+                    dialog.status = Some(format!("Could not locate file: {error}"));
+                }
+                true
+            }
+        }
+    }
+
+    fn default_export_path(&self) -> String {
+        let file_name = policy::export_file_name(self.active_browser);
+
+        home_dir()
+            .map(|directory| directory.join(&file_name).display().to_string())
+            .unwrap_or(file_name)
     }
 
     #[cfg(target_os = "linux")]
@@ -1097,6 +1157,7 @@ impl App {
         self.tui.dialog = Some(DialogState {
             kind,
             status: None,
+            export_path: None,
             focused_button: 0,
             scroll: 0,
         });
@@ -1211,6 +1272,7 @@ impl App {
         self.tui.dialog = Some(DialogState {
             kind: DialogKind::ConfirmRevert,
             status: None,
+            export_path: None,
             focused_button: 0,
             scroll: 0,
         });
@@ -1309,6 +1371,55 @@ fn anchored_cursor(
         .and_then(|current| cursors.iter().find(|cursor| *cursor == current))
         .or_else(|| cursors.get(fallback_index.min(cursors.len().saturating_sub(1))))
         .cloned()
+}
+
+#[cfg(target_os = "windows")]
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("USERPROFILE").map(PathBuf::from)
+}
+
+#[cfg(target_os = "linux")]
+fn home_dir() -> Option<PathBuf> {
+    sudo_user_home().or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+}
+
+#[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
+}
+
+#[cfg(target_os = "linux")]
+fn sudo_user_home() -> Option<PathBuf> {
+    let user = std::env::var("SUDO_USER").ok()?;
+    if user.is_empty() || user == "root" {
+        return None;
+    }
+
+    passwd_home_for_user(&user)
+}
+
+#[cfg(target_os = "linux")]
+fn passwd_home_for_user(user: &str) -> Option<PathBuf> {
+    std::fs::read_to_string("/etc/passwd")
+        .ok()?
+        .lines()
+        .find_map(|line| passwd_line_home(line, user))
+}
+
+#[cfg(target_os = "linux")]
+fn passwd_line_home(line: &str, user: &str) -> Option<PathBuf> {
+    let mut fields = line.split(':');
+    if fields.next()? != user {
+        return None;
+    }
+
+    fields.next()?;
+    fields.next()?;
+    fields.next()?;
+    fields.next()?;
+    let home = fields.next()?;
+
+    (!home.is_empty()).then(|| PathBuf::from(home))
 }
 
 #[cfg(target_os = "linux")]

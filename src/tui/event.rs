@@ -19,7 +19,7 @@ use super::action::Action;
 use super::ui_dialog::ButtonHit;
 #[cfg(target_os = "linux")]
 use super::ui_sudo;
-use super::{ui_apply, ui_footer, ui_help, ui_quit, ui_revert, ui_uninstall};
+use super::{ui_apply, ui_export, ui_footer, ui_help, ui_quit, ui_revert, ui_uninstall};
 use crate::app::{App, DialogKind};
 
 #[derive(Debug, Clone, Copy)]
@@ -80,6 +80,7 @@ fn key_to_action(
         KeyCode::Char('?') => Action::ToggleHelp,
         KeyCode::Char('/') => Action::BeginFilter,
         KeyCode::Char('a') => Action::OpenApplyDialog,
+        KeyCode::Char('S') => Action::OpenExportDialog,
         KeyCode::Enter | KeyCode::Char('e') => Action::BeginPolicyEdit,
         KeyCode::Char('R') => Action::OpenRevertDialog,
         KeyCode::Char('U') => Action::OpenUninstallDialog,
@@ -151,6 +152,10 @@ fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput) -> Action {
 
     match key_event.code {
         KeyCode::Esc => Action::CloseDialog,
+        KeyCode::Char('q') if dialog.kind == DialogKind::ExportFile => Action::CloseDialog,
+        KeyCode::Char('l') if dialog.kind == DialogKind::ExportFile && dialog.primary_enabled => {
+            Action::LocateExportFile
+        }
         KeyCode::Enter | KeyCode::Char(' ') => Action::ActivateDialogButton,
         KeyCode::Char('h') | KeyCode::Left => Action::MoveDialogFocus(-1),
         KeyCode::Char('l') | KeyCode::Right | KeyCode::Tab => Action::MoveDialogFocus(1),
@@ -211,6 +216,7 @@ fn dialog_button_click_action(button: DialogButtonHit) -> Action {
 
     match button.dialog_kind {
         DialogKind::Help => Action::Noop,
+        DialogKind::ExportFile => Action::LocateExportFile,
         DialogKind::ConfirmApply => Action::ConfirmApply,
         DialogKind::ConfirmQuit => Action::ConfirmQuit,
         DialogKind::ConfirmUninstall => Action::ConfirmUninstall,
@@ -224,6 +230,7 @@ fn dialog_button_at(dialog: DialogInput, column: u16, row: u16) -> Option<Dialog
     let area = terminal_area()?;
     let hit = match dialog.kind {
         DialogKind::Help => None,
+        DialogKind::ExportFile => ui_export::button_hit(dialog.primary_enabled, area, column, row),
         DialogKind::ConfirmApply => ui_apply::button_hit(dialog.primary_enabled, area, column, row),
         DialogKind::ConfirmRevert => {
             ui_revert::button_hit(dialog.primary_enabled, area, column, row)

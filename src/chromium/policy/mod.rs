@@ -22,4 +22,4 @@ pub use policy::{BrowserPolicy, PolicyLocation, PolicySet, PolicyValue};
 pub use reader::{PolicyReadResult, read};
 #[cfg(not(target_os = "macos"))]
 pub use writer::uninstall;
-pub use writer::{PolicyWrite, managed_location, write};
+pub use writer::{PolicyWrite, export, export_file_name, managed_location, write};

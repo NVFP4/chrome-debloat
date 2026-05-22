@@ -17,4 +17,12 @@ impl Browser {
             Self::Edge => "Edge",
         }
     }
+
+    pub const fn slug(self) -> &'static str {
+        match self {
+            Self::Brave => "brave",
+            Self::Chrome => "chrome",
+            Self::Edge => "edge",
+        }
+    }
 }
