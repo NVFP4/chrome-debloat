@@ -240,8 +240,7 @@ policyGroups:
     settings:
       # Network
       BuiltInDnsClientEnabled: false
-      # if you want to set this to DnsOverHttpsMode 'secure' ...
-      # then either set BuiltInDnsClientEnabled to true ...
+      # DnsOverHttpsMode 'secure' needs DnsOverHttpsTemplates (and it turns on built-in DNS)
       # or make sure your system is using DoH or DoT
       DnsOverHttpsMode: automatic
       # Additional
