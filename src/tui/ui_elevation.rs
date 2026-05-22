@@ -27,7 +27,7 @@ pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let Some(dialog) = app.dialog() else {
         return;
     };
-    if dialog.kind != DialogKind::SudoRequired {
+    if dialog.kind != DialogKind::ElevatedPermissionsRequired {
         return;
     }
 
@@ -55,18 +55,38 @@ pub(super) fn button_hit(area: Rect, column: u16, row: u16) -> Option<ButtonHit>
 
 fn dialog_text() -> Text<'static> {
     Text::from_iter([
-        ui_dialog::title_line("Linux Elevated Privileges"),
+        ui_dialog::title_line("Elevated Permissions Required"),
         Line::default(),
         Line::from_iter([
-            Span::styled("Chromium policies must be written under ", ui_dialog::BODY),
-            Span::styled("/etc", IMPORTANT),
+            Span::styled("Browser policies must be written at the ", ui_dialog::BODY),
+            Span::styled("system level", IMPORTANT),
             Span::styled(" before they take effect.", ui_dialog::BODY),
         ]),
         Line::default(),
-        Line::from_iter([
-            Span::styled("Restart this app with ", ui_dialog::BODY),
-            Span::styled("sudo", IMPORTANT),
-            Span::styled(" before applying any changes.", ui_dialog::BODY),
-        ]),
+        restart_line(),
+    ])
+}
+
+#[cfg(target_os = "linux")]
+fn restart_line() -> Line<'static> {
+    Line::from_iter([
+        Span::styled("Restart this app with ", ui_dialog::BODY),
+        Span::styled("sudo", IMPORTANT),
+        Span::styled(
+            " before applying or uninstalling policies.",
+            ui_dialog::BODY,
+        ),
+    ])
+}
+
+#[cfg(target_os = "windows")]
+fn restart_line() -> Line<'static> {
+    Line::from_iter([
+        Span::styled("Approve the ", ui_dialog::BODY),
+        Span::styled("UAC prompt", IMPORTANT),
+        Span::styled(
+            " before applying or uninstalling policies.",
+            ui_dialog::BODY,
+        ),
     ])
 }

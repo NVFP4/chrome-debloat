@@ -21,9 +21,9 @@ const LAYOUT: DialogLayout = DialogLayout {
     },
 };
 #[cfg(target_os = "macos")]
-const UNINSTALL_HEIGHT: u16 = 11;
+const UNINSTALL_HEIGHT: u16 = 14;
 #[cfg(not(target_os = "macos"))]
-const UNINSTALL_HEIGHT: u16 = 10;
+const UNINSTALL_HEIGHT: u16 = 13;
 const ERROR: Style = styles::RED;
 const IMPORTANT: Style = styles::YELLOW.add_modifier(Modifier::BOLD);
 #[cfg(not(target_os = "macos"))]

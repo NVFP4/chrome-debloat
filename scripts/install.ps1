@@ -15,23 +15,10 @@ function Write-Info {
     Write-Host $Message -ForegroundColor Cyan
 }
 
-function Write-Warn {
-    param([string] $Message)
-
-    Write-Host $Message -ForegroundColor Yellow
-}
-
 function Enable-Tls12 {
     if ($PSVersionTable.PSEdition -eq "Desktop") {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     }
-}
-
-function Test-Admin {
-    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $Principal = New-Object Security.Principal.WindowsPrincipal $Identity
-
-    $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
 function Assert-SupportedSystem {
@@ -64,19 +51,9 @@ function Expand-App {
 }
 
 function Invoke-App {
-    if (Test-Admin) {
-        & $script:App
-        if ($null -ne $LASTEXITCODE) {
-            $script:ExitCode = $LASTEXITCODE
-        }
-
-        return
-    }
-
-    Write-Warn "Chrome Debloat needs administrator permission to write browser policies at the system level."
-    $Process = Start-Process -FilePath $script:App -Verb RunAs -Wait -PassThru
-    if ($null -ne $Process.ExitCode) {
-        $script:ExitCode = $Process.ExitCode
+    & $script:App
+    if ($null -ne $LASTEXITCODE) {
+        $script:ExitCode = $LASTEXITCODE
     }
 }
 

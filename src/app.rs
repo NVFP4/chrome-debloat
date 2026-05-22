@@ -88,8 +88,8 @@ pub enum DialogKind {
     ConfirmQuit,
     ConfirmUninstall,
     ConfirmRevert,
-    #[cfg(target_os = "linux")]
-    SudoRequired,
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    ElevatedPermissionsRequired,
 }
 
 impl App {
@@ -116,8 +116,8 @@ impl App {
             should_quit: false,
         };
         app.move_policy_cursor_to_start();
-        #[cfg(target_os = "linux")]
-        app.open_sudo_dialog_if_needed();
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        app.open_elevation_dialog_if_needed();
 
         Ok(app)
     }
@@ -973,6 +973,11 @@ impl App {
     }
 
     fn open_uninstall_dialog(&mut self) -> bool {
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        if system_policy_requires_elevation() {
+            return self.open_dialog(DialogKind::ElevatedPermissionsRequired);
+        }
+
         self.open_dialog(DialogKind::ConfirmUninstall)
     }
 
@@ -997,8 +1002,8 @@ impl App {
             (DialogKind::ConfirmQuit, 0) => self.confirm_quit(),
             (DialogKind::ConfirmUninstall, 0) => self.confirm_uninstall(),
             (DialogKind::ConfirmRevert, 0) => self.confirm_revert(),
-            #[cfg(target_os = "linux")]
-            (DialogKind::SudoRequired, 0) => self.close_dialog(),
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            (DialogKind::ElevatedPermissionsRequired, 0) => self.close_dialog(),
             (_, _) => self.close_dialog(),
         }
     }
@@ -1051,15 +1056,15 @@ impl App {
                 self.active_browser_state().is_dirty()
             }
             DialogKind::ConfirmUninstall => true,
-            #[cfg(target_os = "linux")]
-            DialogKind::SudoRequired => false,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            DialogKind::ElevatedPermissionsRequired => false,
         }
     }
 
     fn open_apply_dialog(&mut self) -> bool {
-        #[cfg(target_os = "linux")]
-        if self.active_browser_state().is_dirty() && linux_requires_sudo() {
-            return self.open_dialog(DialogKind::SudoRequired);
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        if self.active_browser_state().is_dirty() && system_policy_requires_elevation() {
+            return self.open_dialog(DialogKind::ElevatedPermissionsRequired);
         }
 
         self.open_dialog(DialogKind::ConfirmApply)
@@ -1113,13 +1118,13 @@ impl App {
             .unwrap_or(file_name)
     }
 
-    #[cfg(target_os = "linux")]
-    fn open_sudo_dialog_if_needed(&mut self) -> bool {
-        if !linux_requires_sudo() {
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    fn open_elevation_dialog_if_needed(&mut self) -> bool {
+        if !system_policy_requires_elevation() {
             return false;
         }
 
-        self.open_dialog(DialogKind::SudoRequired)
+        self.open_dialog(DialogKind::ElevatedPermissionsRequired)
     }
 
     fn open_quit_dialog(&mut self) -> bool {
@@ -1174,9 +1179,9 @@ impl App {
             return false;
         }
 
-        #[cfg(target_os = "linux")]
-        if linux_requires_sudo() {
-            return self.open_dialog(DialogKind::SudoRequired);
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        if system_policy_requires_elevation() {
+            return self.open_dialog(DialogKind::ElevatedPermissionsRequired);
         }
 
         let anchor = self.policy_cursor_anchor();
@@ -1227,6 +1232,11 @@ impl App {
             .is_none_or(|dialog| dialog.kind != DialogKind::ConfirmUninstall)
         {
             return false;
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        if system_policy_requires_elevation() {
+            return self.open_dialog(DialogKind::ElevatedPermissionsRequired);
         }
 
         match self.active_browser_state_mut().uninstall_policy() {
@@ -1420,6 +1430,16 @@ fn passwd_line_home(line: &str, user: &str) -> Option<PathBuf> {
     let home = fields.next()?;
 
     (!home.is_empty()).then(|| PathBuf::from(home))
+}
+
+#[cfg(target_os = "linux")]
+fn system_policy_requires_elevation() -> bool {
+    linux_requires_sudo()
+}
+
+#[cfg(target_os = "windows")]
+fn system_policy_requires_elevation() -> bool {
+    crate::windows::needs_elevation()
 }
 
 #[cfg(target_os = "linux")]

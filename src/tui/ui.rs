@@ -1,8 +1,8 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 
-#[cfg(target_os = "linux")]
-use super::ui_sudo;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+use super::ui_elevation;
 use super::{
     ui_apply,
     ui_content,
@@ -61,8 +61,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
             DialogKind::ConfirmQuit => ui_quit::render(frame, area, app),
             DialogKind::ConfirmRevert => ui_revert::render(frame, area, app),
             DialogKind::ConfirmUninstall => ui_uninstall::render(frame, area, app),
-            #[cfg(target_os = "linux")]
-            DialogKind::SudoRequired => ui_sudo::render(frame, area, app),
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            DialogKind::ElevatedPermissionsRequired => ui_elevation::render(frame, area, app),
         }
     }
 }

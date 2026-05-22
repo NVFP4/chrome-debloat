@@ -17,11 +17,18 @@ mod policy_tree;
 mod tui;
 #[cfg(target_os = "macos")]
 mod watcher;
+#[cfg(target_os = "windows")]
+mod windows;
 
 use anyhow::Result;
 use app::App;
 
 fn main() -> Result<()> {
+    #[cfg(target_os = "windows")]
+    if windows::relaunch_elevated_if_needed() {
+        return Ok(());
+    }
+
     tui::install_panic_hook();
 
     let mut app = App::new()?;

@@ -17,8 +17,8 @@ use ratatui::layout::Rect;
 
 use super::action::Action;
 use super::ui_dialog::ButtonHit;
-#[cfg(target_os = "linux")]
-use super::ui_sudo;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+use super::ui_elevation;
 use super::{ui_apply, ui_export, ui_footer, ui_help, ui_quit, ui_revert, ui_uninstall};
 use crate::app::{App, DialogKind};
 
@@ -178,8 +178,10 @@ fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput) -> Action {
         {
             Action::ConfirmRevert
         }
-        #[cfg(target_os = "linux")]
-        KeyCode::Char('o') if dialog.kind == DialogKind::SudoRequired => Action::CloseDialog,
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        KeyCode::Char('o') if dialog.kind == DialogKind::ElevatedPermissionsRequired => {
+            Action::CloseDialog
+        }
         _ => Action::Noop,
     }
 }
@@ -221,8 +223,8 @@ fn dialog_button_click_action(button: DialogButtonHit) -> Action {
         DialogKind::ConfirmQuit => Action::ConfirmQuit,
         DialogKind::ConfirmUninstall => Action::ConfirmUninstall,
         DialogKind::ConfirmRevert => Action::ConfirmRevert,
-        #[cfg(target_os = "linux")]
-        DialogKind::SudoRequired => Action::CloseDialog,
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        DialogKind::ElevatedPermissionsRequired => Action::CloseDialog,
     }
 }
 
@@ -237,8 +239,8 @@ fn dialog_button_at(dialog: DialogInput, column: u16, row: u16) -> Option<Dialog
         }
         DialogKind::ConfirmQuit => ui_quit::button_hit(area, column, row),
         DialogKind::ConfirmUninstall => ui_uninstall::button_hit(area, column, row),
-        #[cfg(target_os = "linux")]
-        DialogKind::SudoRequired => ui_sudo::button_hit(area, column, row),
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        DialogKind::ElevatedPermissionsRequired => ui_elevation::button_hit(area, column, row),
     };
 
     hit.map(|hit| DialogButtonHit {
