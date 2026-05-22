@@ -10,7 +10,7 @@ use crate::policy_tree::{EditablePolicyValue, PolicyTree, PolicyTreeRowKind, Row
 use crate::tui::action::Action;
 use crate::tui::event::{DialogInput, PolicyInputMode};
 
-const REPORT_ISSUE_URL: &str = env!("CARGO_PKG_REPOSITORY");
+pub(crate) const REPORT_ISSUE_URL: &str = env!("CARGO_PKG_REPOSITORY");
 
 #[derive(Debug)]
 pub struct App {
@@ -694,6 +694,14 @@ impl App {
         let anchor = self.policy_cursor_anchor();
 
         if self.browsers[index].stage_policy_removal_at(&cursor) {
+            self.sync_policy_cursor_to_anchor(anchor);
+            self.clear_policy_editors();
+            return true;
+        }
+
+        if self.tui.filter.query.is_empty()
+            && self.browsers[index].stage_policy_group_removal_at(&self.manifest, &cursor)
+        {
             self.sync_policy_cursor_to_anchor(anchor);
             self.clear_policy_editors();
             return true;

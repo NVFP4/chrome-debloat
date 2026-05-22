@@ -450,6 +450,45 @@ pub(crate) fn remove_at(current: &PolicySet, target: &RowId) -> Option<PolicySet
     (updated != *current).then_some(updated)
 }
 
+pub(crate) fn remove_group_at(
+    manifest: &Manifest,
+    browser: Browser,
+    current: &PolicySet,
+    cursor: &RowId,
+) -> Option<PolicySet> {
+    let target = match cursor.target() {
+        RowTarget::Group(target) => target,
+        RowTarget::Policy { .. }
+        | RowTarget::Path { .. }
+        | RowTarget::ListItem { .. }
+        | RowTarget::Display { .. } => return None,
+    };
+
+    let mut updated = current.clone();
+    match target {
+        GroupTarget::Custom => {
+            let active_keys = active_group_keys(manifest, browser);
+            for key in current
+                .keys()
+                .filter(|key| !active_keys.contains(key.as_str()))
+            {
+                updated.remove(key);
+            }
+        }
+        GroupTarget::Manifest(group_id) => {
+            let groups = ordered_groups(manifest, browser);
+            let group = groups
+                .into_iter()
+                .find(|group| group.group.id == *group_id)?;
+            for setting in group.settings {
+                updated.remove(&setting.key);
+            }
+        }
+    }
+
+    (updated != *current).then_some(updated)
+}
+
 pub(crate) fn toggle_group_at(
     manifest: &Manifest,
     browser: Browser,

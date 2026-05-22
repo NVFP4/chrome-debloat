@@ -2,11 +2,10 @@ use std::io::{self, Stdout};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-#[cfg(target_os = "windows")]
-use crossterm::event::EnableMouseCapture;
+use crossterm::cursor::MoveTo;
 use crossterm::event::{DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste};
 use crossterm::execute;
-use crossterm::style::Print;
+use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{
     EnterAlternateScreen,
     LeaveAlternateScreen,
@@ -15,8 +14,9 @@ use crossterm::terminal::{
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Rect;
 
-use super::{event, ui};
+use super::{event, ui, ui_footer};
 use crate::app::App;
 
 pub type TuiTerminal = Terminal<CrosstermBackend<Stdout>>;
@@ -70,12 +70,7 @@ pub fn init() -> Result<TuiTerminal> {
 
 #[cfg(target_os = "windows")]
 fn enter_terminal_screen(stdout: &mut Stdout) -> io::Result<()> {
-    execute!(
-        stdout,
-        EnterAlternateScreen,
-        EnableMouseCapture,
-        EnableBracketedPaste
-    )
+    execute!(stdout, EnterAlternateScreen, EnableBracketedPaste)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -110,6 +105,7 @@ fn run_loop(terminal: &mut TuiTerminal, app: &mut App) -> Result<()> {
             terminal
                 .draw(|frame| ui::render(frame, app))
                 .context("draw terminal frame")?;
+            render_footer_hyperlinks(terminal, app).context("render footer hyperlinks")?;
         }
 
         let action = event::read_action(app, TICK_RATE)?;
@@ -117,6 +113,30 @@ fn run_loop(terminal: &mut TuiTerminal, app: &mut App) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn render_footer_hyperlinks(terminal: &mut TuiTerminal, app: &App) -> Result<()> {
+    let size = terminal.size().context("query terminal size")?;
+    let area = Rect::new(0, 0, size.width, size.height);
+    let Some(link_area) = ui_footer::report_issue_link_area(area, app) else {
+        return Ok(());
+    };
+    let hyperlink = format!(
+        "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
+        crate::app::REPORT_ISSUE_URL,
+        ui_footer::REPORT_ISSUE
+    );
+
+    execute!(
+        terminal.backend_mut(),
+        MoveTo(link_area.x, link_area.y),
+        SetForegroundColor(Color::Yellow),
+        SetAttribute(Attribute::Underlined),
+        Print(hyperlink),
+        ResetColor,
+        SetAttribute(Attribute::NoUnderline),
+    )
+    .context("write report issue hyperlink")
 }
 
 fn restore(terminal: &mut TuiTerminal) -> Result<()> {

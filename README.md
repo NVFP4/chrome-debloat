@@ -40,14 +40,13 @@ This tool does not require installation, and can be run in a single command.
 
 ### Linux / macOS
 
-```bash
-sh -c "$(curl -fsSL https://debloat.yashg.dev/install.sh)"
+```sh
+sh -c "$(curl -fsSL "https://debloat.yashg.dev/install.sh")"
 ```
 
 ### Windows
-
-```powershell
-irm https://debloat.yashg.dev/install.ps1 | iex
+```sh
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 Or download the binary from the [latest GitHub release](https://github.com/NVFP4/chrome-debloat/releases/latest) and run it directly.
@@ -98,7 +97,9 @@ Press `h` `l` or `←` `→` to jump policy groups.
 
 Press `j` `k` or `↑` `↓` to navigate through the list.
 
-Press `space` to remove a policy item. Press `space` on a policy group to remove all the items within it.
+Press `space` to toggle a policy item. Press it on a policy group to toggle all items within it.
+
+Press `d` or `backspace` on a policy item or a group to mark them for deletion.
 
 Press `enter` to edit the value of a policy item
 
