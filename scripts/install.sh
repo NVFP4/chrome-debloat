@@ -112,7 +112,7 @@ download_app() {
 
 run_app() {
   if [ "$platform" != "linux" ]; then
-    "$app"
+    exec "$app"
     return
   fi
 
@@ -133,4 +133,4 @@ main() {
   run_app
 }
 
-main
+main "$@"

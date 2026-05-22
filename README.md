@@ -41,7 +41,7 @@ This tool does not require installation, and can be run in a single command.
 ### Linux / macOS
 
 ```bash
-curl https://debloat.yashg.dev/install.sh | sh
+sh -c "$(curl -fsSL https://debloat.yashg.dev/install.sh)"
 ```
 
 ### Windows
