@@ -21,11 +21,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            asset: chrome-debloat-linux.tar.gz
+            artifact: chrome-debloat-linux
           - os: macos-latest
-            asset: chrome-debloat-macos.tar.gz
+            artifact: chrome-debloat-macos
           - os: windows-latest
-            asset: chrome-debloat-windows.zip
+            artifact: chrome-debloat-windows
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,6 +40,11 @@ jobs:
         with:
           components: rustfmt
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: check-${{ matrix.os }}
+
       - name: Format
         run: cargo +nightly fmt --all --check
 
@@ -52,25 +57,12 @@ jobs:
       - name: Test
         run: cargo +1.95.0 test --workspace --all-features
 
-      - name: Package binary
-        if: runner.os != 'Windows'
-        run: |
-          mkdir -p package
-          cp target/release/chrome-debloat package/
-          tar -czf "${{ matrix.asset }}" -C package chrome-debloat
-
-      - name: Package binary
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path package | Out-Null
-          Copy-Item target/release/chrome-debloat.exe package/
-          Compress-Archive -Path package/chrome-debloat.exe -DestinationPath "${{ matrix.asset }}"
-
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: ${{ matrix.asset }}
+          name: ${{ matrix.artifact }}
+          path: |
+            target/release/chrome-debloat
+            target/release/chrome-debloat.exe
           if-no-files-found: error
           retention-days: 1
