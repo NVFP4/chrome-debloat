@@ -276,7 +276,11 @@ impl BrowserState {
     pub fn uninstall_policy(&mut self) -> Result<(), String> {
         policy::uninstall(self.browser).map_err(|error| error.to_string())?;
 
-        self.policy = None;
+        self.policy = Some(BrowserPolicy {
+            browser: self.browser,
+            source: policy::managed_location(self.browser),
+            policies: PolicySet::new(),
+        });
         self.policy_error = None;
         self.managed_policy_exists = false;
         self.edits.revert();
@@ -288,6 +292,12 @@ impl BrowserState {
 
     pub fn stage_policy_removal_at(&mut self, cursor: &RowId) -> bool {
         self.edit_current(|_, _, current| policy_tree::remove_at(current, cursor))
+    }
+
+    pub fn stage_policy_group_removal_at(&mut self, manifest: &Manifest, cursor: &RowId) -> bool {
+        self.edit_current(|browser, _, current| {
+            policy_tree::remove_group_at(manifest, browser, current, cursor)
+        })
     }
 
     pub fn toggle_policy_group_at(&mut self, manifest: &Manifest, cursor: &RowId) -> bool {
