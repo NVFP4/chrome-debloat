@@ -9,6 +9,7 @@ arch=""
 asset=""
 download_url=""
 archive=""
+checksum=""
 app=""
 
 red='\033[1;31m'
@@ -102,12 +103,38 @@ download_app() {
   asset="$binary-$platform-$arch.tar.gz"
   download_url="https://github.com/$repo/releases/latest/download/$asset"
   archive="$tmpdir/$asset"
+  checksum="$archive.sha256"
   app="$tmpdir/$binary"
 
   info "Downloading $asset..."
   download "$download_url" "$archive"
+  download "$download_url.sha256" "$checksum"
+  info "Verifying $asset..."
+  verify_checksum
   tar -xzf "$archive" -C "$tmpdir"
   chmod +x "$app"
+}
+
+verify_checksum() {
+  expected="$(awk '{print $1; exit}' "$checksum" | tr '[:upper:]' '[:lower:]')"
+
+  if [ -z "$expected" ]; then
+    err "checksum file for $asset was empty"
+  fi
+
+  if have sha256sum; then
+    actual="$(sha256sum "$archive" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+  elif have shasum; then
+    actual="$(shasum -a 256 "$archive" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+  elif have openssl; then
+    actual="$(openssl dgst -sha256 "$archive" | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
+  else
+    err "need 'sha256sum', 'shasum', or 'openssl' to verify downloads"
+  fi
+
+  if [ "$actual" != "$expected" ]; then
+    err "checksum mismatch for $asset"
+  fi
 }
 
 run_app() {

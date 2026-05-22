@@ -6,6 +6,7 @@ $script:Asset = ""
 $script:Url = ""
 $script:TempDir = ""
 $script:Archive = ""
+$script:Checksum = ""
 $script:App = ""
 $script:ExitCode = 0
 
@@ -32,6 +33,7 @@ function Initialize-InstallPaths {
     $script:Url = "https://github.com/$script:Repo/releases/latest/download/$script:Asset"
     $script:TempDir = Join-Path ([IO.Path]::GetTempPath()) ("chrome-debloat-" + [Guid]::NewGuid().ToString("N"))
     $script:Archive = Join-Path $script:TempDir $script:Asset
+    $script:Checksum = "$script:Archive.sha256"
     $script:App = Join-Path $script:TempDir $script:Binary
 
     New-Item -ItemType Directory -Path $script:TempDir | Out-Null
@@ -40,6 +42,21 @@ function Initialize-InstallPaths {
 function Download-App {
     Write-Info "Downloading $script:Asset..."
     Invoke-WebRequest -UseBasicParsing -Uri $script:Url -OutFile $script:Archive
+    Invoke-WebRequest -UseBasicParsing -Uri "$script:Url.sha256" -OutFile $script:Checksum
+}
+
+function Test-Checksum {
+    Write-Info "Verifying $script:Asset..."
+
+    $expected = ((Get-Content -LiteralPath $script:Checksum -TotalCount 1) -split "\s+")[0].ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($expected)) {
+        throw "Checksum file for $script:Asset was empty."
+    }
+
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $script:Archive).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) {
+        throw "Checksum mismatch for $script:Asset."
+    }
 }
 
 function Expand-App {
@@ -72,6 +89,7 @@ function Main {
     Assert-SupportedSystem
     Initialize-InstallPaths
     Download-App
+    Test-Checksum
     Expand-App
     Invoke-App
 }
