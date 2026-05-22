@@ -1595,3 +1595,377 @@ impl PolicyValue {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    #[test]
+    fn visible_indices_return_all_rows_for_blank_queries() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Privacy"),
+                policy(1, "HomepageLocation", string("https://example.com")),
+                value(2, string("child")),
+            ],
+        };
+
+        assert_eq!(tree.visible_indices(""), vec![0, 1, 2]);
+        assert_eq!(tree.visible_indices(" \t\n "), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn visible_indices_return_no_rows_when_nothing_matches() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Privacy"),
+                policy(1, "HomepageLocation", string("https://example.com")),
+                value(2, string("child")),
+            ],
+        };
+
+        assert_eq!(tree.visible_indices("missing"), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn group_match_includes_group_descendants_until_next_group() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Privacy Controls"),
+                policy(1, "TrackingProtection", bool_value(true)),
+                value(2, string("tracking child")),
+                group("Startup"),
+                policy(1, "RestoreOnStartup", integer(1)),
+            ],
+        };
+
+        assert_visible(
+            &tree,
+            "privacy",
+            &[
+                "group:Privacy Controls",
+                "policy:TrackingProtection",
+                "value:tracking child",
+            ],
+        );
+    }
+
+    #[test]
+    fn parent_policy_match_includes_descendants() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Managed Settings"),
+                policy(1, "ParentSettings", object()),
+                policy(2, "ChildOne", object()),
+                value(3, string("first child value")),
+                policy(2, "ChildTwo", object()),
+                value(3, string("second child value")),
+                policy(1, "SiblingSettings", object()),
+                value(2, string("sibling value")),
+            ],
+        };
+
+        assert_visible(
+            &tree,
+            "parentsettings",
+            &[
+                "group:Managed Settings",
+                "policy:ParentSettings",
+                "policy:ChildOne",
+                "value:first child value",
+                "policy:ChildTwo",
+                "value:second child value",
+            ],
+        );
+    }
+
+    #[test]
+    fn child_policy_match_includes_ancestors_and_descendants_without_siblings() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Security"),
+                policy(1, "RootObject", object()),
+                policy(2, "TargetBranch", object()),
+                value(3, string("target descendant")),
+                policy(2, "SiblingBranch", object()),
+                value(3, string("sibling descendant")),
+            ],
+        };
+
+        assert_visible(
+            &tree,
+            "targetbranch",
+            &[
+                "group:Security",
+                "policy:RootObject",
+                "policy:TargetBranch",
+                "value:target descendant",
+            ],
+        );
+    }
+
+    #[test]
+    fn value_match_includes_ancestors_without_siblings() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Security"),
+                policy(1, "RootObject", object()),
+                policy(2, "MatchingChild", object()),
+                value(3, integer(1234)),
+                value(3, integer(5678)),
+                policy(2, "SiblingChild", object()),
+                value(3, integer(9999)),
+            ],
+        };
+
+        assert_visible(
+            &tree,
+            "1234",
+            &[
+                "group:Security",
+                "policy:RootObject",
+                "policy:MatchingChild",
+                "value:1234",
+            ],
+        );
+    }
+
+    #[test]
+    fn deeply_nested_object_match_includes_full_ancestor_chain() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Nested Policies"),
+                policy(1, "TopObject", object()),
+                policy(2, "LevelOne", object()),
+                policy(3, "LevelTwo", object()),
+                policy(4, "LevelThree", object()),
+                policy(5, "LevelFour", object()),
+                value(6, string("deep target")),
+                policy(3, "LevelTwoSibling", object()),
+                value(4, string("sibling target")),
+                policy(1, "TopSibling", object()),
+            ],
+        };
+
+        assert_visible(
+            &tree,
+            "deep target",
+            &[
+                "group:Nested Policies",
+                "policy:TopObject",
+                "policy:LevelOne",
+                "policy:LevelTwo",
+                "policy:LevelThree",
+                "policy:LevelFour",
+                "value:deep target",
+            ],
+        );
+    }
+
+    #[test]
+    fn nested_list_item_match_keeps_list_context_without_sibling_items() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Network"),
+                policy(1, "TopObject", object()),
+                policy(2, "ListContainer", object()),
+                policy(3, "UrlList", list(2)),
+                value(4, string("https://alpha.example")),
+                value(4, string("https://beta.example")),
+                policy(3, "NeighborList", list(1)),
+                value(4, string("https://neighbor.example")),
+            ],
+        };
+
+        assert_visible(
+            &tree,
+            "beta.example",
+            &[
+                "group:Network",
+                "policy:TopObject",
+                "policy:ListContainer",
+                "policy:UrlList",
+                "value:https://beta.example",
+            ],
+        );
+    }
+
+    #[test]
+    fn filtering_ignores_query_case_and_outer_whitespace() {
+        let tree = PolicyTree {
+            rows: vec![
+                group("Mixed Case Group"),
+                policy(1, "PolicyWithMixedCase", string("Value With Case")),
+                policy(1, "OtherPolicy", string("other")),
+            ],
+        };
+
+        assert_visible(
+            &tree,
+            "  value with CASE  ",
+            &["group:Mixed Case Group", "policy:PolicyWithMixedCase"],
+        );
+    }
+
+    #[test]
+    fn build_creates_filterable_rows_for_nested_objects_and_lists()
+    -> Result<(), crate::manifest::ManifestError> {
+        let manifest = Manifest::load()?;
+        let baseline = PolicySet::new();
+        let mut current = PolicySet::new();
+        current.insert(
+            "SyntheticNestedPolicyForFilterTest".to_owned(),
+            object_with([
+                (
+                    "Nested",
+                    object_with([
+                        ("Sibling", string("sibling value")),
+                        (
+                            "Urls",
+                            PolicyValue::List(vec![
+                                string("https://alpha.example"),
+                                string("https://needle.example"),
+                            ]),
+                        ),
+                    ]),
+                ),
+                ("TopSibling", string("top sibling value")),
+            ]),
+        );
+        let tree = PolicyTree::build(&manifest, Browser::Chrome, &baseline, &current);
+
+        assert_visible(
+            &tree,
+            "needle.example",
+            &[
+                "group:Custom",
+                "policy:SyntheticNestedPolicyForFilterTest",
+                "policy:Nested",
+                "policy:Urls",
+                "value:https://needle.example",
+            ],
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn extension_install_forcelist_matches_extension_display_name()
+    -> Result<(), crate::manifest::ManifestError> {
+        let manifest = Manifest::load()?;
+        let baseline = PolicySet::new();
+        let mut current = PolicySet::new();
+        current.insert(
+            EXTENSION_INSTALL_FORCELIST.to_owned(),
+            PolicyValue::List(vec![string("cjpalhdlnbpafiamejdnhcphjbkeiagm")]),
+        );
+        let tree = PolicyTree::build(&manifest, Browser::Chrome, &baseline, &current);
+
+        assert_visible(
+            &tree,
+            "ublock origin",
+            &[
+                "group:Extensions",
+                "policy:ExtensionInstallForcelist",
+                "value:cjpalhdlnbpafiamejdnhcphjbkeiagm",
+            ],
+        );
+
+        Ok(())
+    }
+
+    fn assert_visible(tree: &PolicyTree, query: &str, expected: &[&str]) {
+        let actual = tree
+            .visible_indices(query)
+            .into_iter()
+            .map(|index| row_label(&tree.rows[index]))
+            .collect::<Vec<_>>();
+        let expected = expected
+            .iter()
+            .map(|label| (*label).to_owned())
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual, expected);
+    }
+
+    fn row_label(row: &PolicyTreeRow) -> String {
+        match &row.kind {
+            PolicyTreeRowKind::Group { title, .. } => format!("group:{title}"),
+            PolicyTreeRowKind::Policy { key, .. } => format!("policy:{key}"),
+            PolicyTreeRowKind::Value { value, .. } => {
+                format!("value:{}", value.child_label().trim_matches('"'))
+            }
+        }
+    }
+
+    fn group(title: &str) -> PolicyTreeRow {
+        PolicyTreeRow::group(
+            title.to_owned(),
+            GroupStatus::None,
+            RowTarget::Group(GroupTarget::Manifest(title.to_owned())),
+        )
+    }
+
+    fn policy(indent: usize, key: &str, raw_value: PolicyValue) -> PolicyTreeRow {
+        let value = PolicyValueSummary::new(&raw_value);
+
+        PolicyTreeRow {
+            kind: PolicyTreeRowKind::Policy {
+                indent,
+                key: key.to_owned(),
+                value: value.clone(),
+                status: RowStatus::NotApplied,
+            },
+            id: RowId::new(RowTarget::Policy {
+                key: key.to_owned(),
+            }),
+            search_text: policy_search_text(key, &value),
+        }
+    }
+
+    fn value(indent: usize, raw_value: PolicyValue) -> PolicyTreeRow {
+        PolicyTreeRow::value_row(
+            indent,
+            &raw_value,
+            RowStatus::NotApplied,
+            None,
+            RowTarget::ListItem {
+                key: format!("test-list-{indent}"),
+                path: Vec::new(),
+                current_index: Some(indent),
+                restore_index: indent,
+            },
+        )
+    }
+
+    fn bool_value(value: bool) -> PolicyValue {
+        PolicyValue::Bool(value)
+    }
+
+    fn integer(value: i64) -> PolicyValue {
+        PolicyValue::Integer(value)
+    }
+
+    fn list(len: usize) -> PolicyValue {
+        PolicyValue::List((0..len).map(|_| PolicyValue::Null).collect())
+    }
+
+    fn object() -> PolicyValue {
+        PolicyValue::Object(BTreeMap::new())
+    }
+
+    fn object_with<const N: usize>(entries: [(&str, PolicyValue); N]) -> PolicyValue {
+        PolicyValue::Object(
+            entries
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect(),
+        )
+    }
+
+    fn string(value: &str) -> PolicyValue {
+        PolicyValue::String(value.to_owned())
+    }
+}
