@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: chrome-debloat-linux-x86_64.tar.gz
+            archive: tar
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            asset: chrome-debloat-linux-aarch64.tar.gz
+            archive: tar
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset: chrome-debloat-macos-x86_64.tar.gz
+            archive: tar
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset: chrome-debloat-macos-aarch64.tar.gz
+            archive: tar
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: chrome-debloat-windows-x86_64.zip
+            archive: zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked --target "${{ matrix.target }}"
+
+      - name: Package tarball
+        if: matrix.archive == 'tar'
+        run: |
+          mkdir -p package
+          cp "target/${{ matrix.target }}/release/chrome-debloat" package/
+          tar -czf "${{ matrix.asset }}" -C package chrome-debloat
+
+      - name: Package zip
+        if: matrix.archive == 'zip'
+        run: |
+          New-Item -ItemType Directory -Path package | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/chrome-debloat.exe" package/
+          Compress-Archive -Path package/chrome-debloat.exe -DestinationPath "${{ matrix.asset }}"
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: dist/*
+          generate_release_notes: true
