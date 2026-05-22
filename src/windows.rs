@@ -1,11 +1,12 @@
 use std::env;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+const ELEVATION_ATTEMPTED_ARG: &str = "--chrome-debloat-elevation-attempted";
 const ADMIN_CHECK_SCRIPT: &str = concat!(
     "$identity = [Security.Principal.WindowsIdentity]::GetCurrent();",
-    "$principal = [Security.Principal.WindowsPrincipal]::new($identity);",
+    "$principal = New-Object Security.Principal.WindowsPrincipal $identity;",
     "if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {",
     "exit 0",
     "} else {",
@@ -13,17 +14,10 @@ const ADMIN_CHECK_SCRIPT: &str = concat!(
     "}",
 );
 
-const RELAUNCH_SCRIPT: &str = concat!(
-    "$exe = $args[0];",
-    "if ($args.Count -gt 1) {",
-    "$appArgs = $args[1..($args.Count - 1)];",
-    "Start-Process -FilePath $exe -ArgumentList $appArgs -Verb RunAs -Wait",
-    "} else {",
-    "Start-Process -FilePath $exe -Verb RunAs -Wait",
-    "}",
-);
-
 pub fn relaunch_elevated_if_needed() -> bool {
+    if elevation_was_already_attempted() {
+        return false;
+    }
     if !needs_elevation() {
         return false;
     }
@@ -37,6 +31,10 @@ pub fn relaunch_elevated_if_needed() -> bool {
     };
 
     status.success()
+}
+
+fn elevation_was_already_attempted() -> bool {
+    env::args_os().any(|arg| arg == OsStr::new(ELEVATION_ATTEMPTED_ARG))
 }
 
 pub fn needs_elevation() -> bool {
@@ -59,12 +57,36 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let mut command = powershell();
+    command.arg("-Command").arg(relaunch_script(exe, args));
     command
-        .arg("-Command")
-        .arg(RELAUNCH_SCRIPT)
-        .arg(exe)
-        .args(args);
-    command
+}
+
+fn relaunch_script<I>(exe: &Path, args: I) -> String
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let exe = powershell_string(&exe.as_os_str().to_string_lossy());
+    let mut args = args
+        .into_iter()
+        .filter(|arg| arg != OsStr::new(ELEVATION_ATTEMPTED_ARG))
+        .collect::<Vec<_>>();
+    args.push(OsString::from(ELEVATION_ATTEMPTED_ARG));
+
+    let args = args
+        .into_iter()
+        .map(|arg| powershell_string(&arg.to_string_lossy()))
+        .collect::<Vec<_>>();
+    let argument_list = format!(" -ArgumentList @({})", args.join(", "));
+
+    format!(
+        "$ErrorActionPreference = 'Stop'; \
+         Start-Process -FilePath {}{} -Verb RunAs -Wait",
+        exe, argument_list,
+    )
+}
+
+fn powershell_string(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn powershell() -> Command {
