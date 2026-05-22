@@ -49,14 +49,6 @@ download() {
   fi
 }
 
-run_from_tty() {
-  if [ -r /dev/tty ]; then
-    "$@" </dev/tty
-  else
-    "$@"
-  fi
-}
-
 cleanup() {
   if [ -n "$tmpdir" ]; then
     rm -rf "$tmpdir"
@@ -120,17 +112,16 @@ download_app() {
 
 run_app() {
   if [ "$platform" != "linux" ]; then
-    run_from_tty "$app"
+    "$app"
     return
   fi
 
-  warn "Chrome Debloat needs sudo to write browser policies in /etc."
-
   if [ "$(id -u)" = "0" ]; then
-    run_from_tty "$app"
+    exec "$app"
   else
     need sudo
-    run_from_tty sudo "$app"
+    warn "Chrome Debloat needs sudo to write browser policies in /etc."
+    exec sudo "$app"
   fi
 }
 
