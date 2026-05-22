@@ -699,6 +699,14 @@ impl App {
             return true;
         }
 
+        if self.tui.filter.query.is_empty()
+            && self.browsers[index].stage_policy_group_removal_at(&self.manifest, &cursor)
+        {
+            self.sync_policy_cursor_to_anchor(anchor);
+            self.clear_policy_editors();
+            return true;
+        }
+
         false
     }
 

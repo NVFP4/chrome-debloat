@@ -98,7 +98,9 @@ Press `h` `l` or `←` `→` to jump policy groups.
 
 Press `j` `k` or `↑` `↓` to navigate through the list.
 
-Press `space` to remove a policy item. Press `space` on a policy group to remove all the items within it.
+Press `space` to toggle a policy item. Press it on a policy group to toggle all items within it.
+
+Press `d` or `backspace` on a policy item or a group to mark them for deletion.
 
 Press `enter` to edit the value of a policy item
 
