@@ -52,6 +52,86 @@ irm https://debloat.yashg.dev/install.ps1 | iex
 
 Or download the binary from the [latest GitHub release](https://github.com/yashgorana/chrome-debloat/releases/latest) and run it directly.
 
+## Usage
+
+On first launch, recommended profiles are pre-selected by default.
+
+### Applying Profiles
+
+Press `a` to apply these profiles directly for the current selected browser.
+
+<img src="./docs/first-launch.png" alt="first launch" width="640px"/>
+
+
+> [!WARNING]
+> On Windows, the policy will be applied automatically.
+> On Linux, the policy will be applied automatically, but app needs to run as `sudo`.
+> On macOS, you will be prompted to install the profiles through System Settings.
+
+<img src="./docs/macos-install-001.png" alt="macos apply prompt" width="640px"/>
+
+Chrome debloat will automatically open System preferences
+
+<img src="./docs/macos-install-002.png" alt="macos prefs downloaded" width="640px"/>
+
+Double click to install the profile. This will show the review dialog. Press Install.
+
+<img src="./docs/macos-install-003.png" alt="macos prefs review" width="640px"/>
+
+After entering your credentials, the policies will take effect.
+
+<img src="./docs/macos-install-004.png" alt="macos prefs installed" width="640px"/>
+
+### Choosing Browsers
+
+You can press numbers `1`, `2`, `3` to select the browser from the tab for which policies will be applied.
+
+<img src="./docs/browser-tabs.png" alt="browser tabs" width="640px"/>
+
+**NOTE**: You can apply policies for browsers that are not available on the system.
+
+### Customizing Policies
+
+The recommended preset provides a solid baseline, but you can customize it to fit your needs. The configuration acts like an editor, allowing you to add, edit, or remove individual policies or entire policy groups.
+
+Press `h` `l` or `←` `→` to jump policy groups.
+
+Press `j` `k` or `↑` `↓` to navigate through the list.
+
+Press `space` to remove a policy item. Press `space` on a policy group to remove all the items within it.
+
+Press `enter` to edit the value of a policy item
+
+<img src="./docs/editor.png" alt="editor" width="640px"/>
+
+Or you can use filters to quickly narrow down that policy item. 
+
+Press `/` to show the filter input and type your query.
+Press `Tab` to leave the input, and browse the results.
+
+<img src="./docs/filter.png" alt="filter" width="640px"/>
+
+**Note**: Filter applies to current browser settings, but you can switch to other browsers and the ilte
+
+If you've made changes that you don't want, you press `z` undo last edit, `r` to redo and `R` (`Shift+r`) to revert all changes.
+
+### Exporting Policies
+
+You can export the policies (including the edits) on your system without applying.
+
+Press `S` (`Shift+s`) to save the policy
+
+<img src="./docs/export.png" alt="uninstall" width="640px"/>
+
+### Uninstalling Policies
+
+If you want to delete all policies for the selected browser, press `U` (`Shift+u`).
+
+<img src="./docs/uninstall.png" alt="uninstall" width="640px"/>
+
+> [!WARNING]
+> This is destructive. So make sure you save a copy of your policies.
+
 ## Policy Documentation
 
 - [Chrome Enterprise Policies](https://chromeenterprise.google/policies/)
