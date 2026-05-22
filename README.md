@@ -1,24 +1,32 @@
 # Chrome Debloat
 
-A tool to generate policies for Chromium-based browsers (Chrome, Brave, and Edge) that disable unnecessary features, telemetry, and bloatware while enabling some quality-of-life improvements.
+A TUI tool for automatically configuring and applying policies to Chromium-based browsers, ensuring a cleaner browsing experience.
+
+Instantly disable telemetry, promotional clutter, and browser bloat while maintaining full usability. Includes a built-in editor for fine-tuning policies to your needs.
+
+> [!WARNING]
+> The old policy generation script is available in `legacy` branch, but it will not be maintained.
 
 ## Features
 
-- Attempts to disable telemetry and usage reporting
-- Removes unnecessary features and pre-installed bloatware
-- Blocks promotional content and unnecessary UI elements
-- Maintains browser functionality while reducing resource usage
-- Pre-configures essential extensions:
-  - uBlock Origin
-  - Cookie AutoDelete
-  - Don't f*** with paste
-  - I still don't care about cookies
-  - SponsorBlock
-  - BlockTube
-  - BlankTab
-  - Decentraleyes
+- Disable telemetry and usage reporting
+- Disable GenAI features
+- Disable bloatware, promotional features and suggested content
+- Disable vendor specific Sign-In and Sync
+- Tighten Site-Shield settings (disable location detection, notifications, etc)
+- Install content-blocking extensions:
+  - **Brave**
+    - uBlock Origin
+    - I still don't care about cookies
+  - **Chrome**
+    - uBlock Origin Lite
+    - I still don't care about cookies
+  - **Edge** (from edge addons store)
+    - uBlock Origin
+    - I still don't care about cookies
+    - Blank Tab
 
-### Supported Browsers
+## Supported Browsers
 
 | Browser | Windows | macOS | Linux |
 |---------|---------|-------|-------|
@@ -28,62 +36,101 @@ A tool to generate policies for Chromium-based browsers (Chrome, Brave, and Edge
 
 ## Quick Start
 
+This tool does not require installation, and can be run in a single command.
+
+### Linux / macOS
+
+```bash
+curl https://debloat.yashg.dev/install.sh | sh
+```
+
 ### Windows
-1.  Download the `.reg` file for your browser from [`generated/windows/`](./generated/windows/).
-2.  Open the downloaded `.reg` file to add the settings to the Windows Registry.
-3.  Restart your browser or go to `chrome://policy` (or `edge://policy`, `brave://policy`) and click "Reload policies".
 
-### macOS
-1.  Download the `.mobileconfig` file for your browser from [`generated/macos/`](./generated/macos/).
-2.  Open the downloaded `.mobileconfig` file to start the profile installation.
-3.  Go to `System Settings` > `Privacy & Security` > `Profiles` and approve the new profile.
-4.  Restart your browser or go to `chrome://policy` (or `edge://policy`, `brave://policy`) and click "Reload policies".
+```powershell
+irm https://debloat.yashg.dev/install.ps1 | iex
+```
 
-### Linux
-1.  Download the `.json` file for your browser from [`generated/linux/`](./generated/linux/).
-2.  Move the downloaded file to the correct policy directory (create it if needed):
-    *   **Chrome:** `/etc/opt/chrome/policies/managed/chrome.json`
-    *   **Edge:** `/etc/opt/edge/policies/managed/edge.json`
-    *   **Brave:** `/etc/brave/policies/managed/brave.json`
-    *   *Note: You might need `sudo` rights to do this.*
-3.  Restart your browser or go to `chrome://policy` (or `edge://policy`, `brave://policy`) and click "Reload policies".
+Or download the binary from the [latest GitHub release](https://github.com/yashgorana/chrome-debloat/releases/latest) and run it directly.
 
-## Custom Configuration
+## Usage
 
-If you want to customize the policies:
+On first launch, recommended profiles are pre-selected by default.
 
-1. Clone this repository
-2. Install dependencies:
-   ```bash
-   uv sync
-   ```
-3. Modify `policies.yaml` according to your needs
-4. Generate new configuration files:
-   ```bash
-   uv run main.py
-   ```
-5. Find the generated files in `generated/` directory
+### Applying Profiles
 
+Press `a` to apply these profiles directly for the current selected browser.
+
+<img src="./docs/first-launch.png" alt="first launch" width="640px"/>
+
+
+> [!WARNING]
+> On Windows, the policy will be applied automatically.
+> On Linux, the policy will be applied automatically, but app needs to run as `sudo`.
+> On macOS, you will be prompted to install the profiles through System Settings.
+
+<img src="./docs/macos-install-001.png" alt="macos apply prompt" width="640px"/>
+
+Chrome debloat will automatically open System preferences
+
+<img src="./docs/macos-install-002.png" alt="macos prefs downloaded" width="640px"/>
+
+Double click to install the profile. This will show the review dialog. Press Install.
+
+<img src="./docs/macos-install-003.png" alt="macos prefs review" width="640px"/>
+
+After entering your credentials, the policies will take effect.
+
+<img src="./docs/macos-install-004.png" alt="macos prefs installed" width="640px"/>
+
+### Choosing Browsers
+
+You can press numbers `1`, `2`, `3` to select the browser from the tab for which policies will be applied.
+
+<img src="./docs/browser-tabs.png" alt="browser tabs" width="640px"/>
+
+**NOTE**: You can apply policies for browsers that are not available on the system.
+
+### Customizing Policies
+
+The recommended preset provides a solid baseline, but you can customize it to fit your needs. The configuration acts like an editor, allowing you to add, edit, or remove individual policies or entire policy groups.
+
+Press `h` `l` or `←` `→` to jump policy groups.
+
+Press `j` `k` or `↑` `↓` to navigate through the list.
+
+Press `space` to remove a policy item. Press `space` on a policy group to remove all the items within it.
+
+Press `enter` to edit the value of a policy item
+
+<img src="./docs/editor.png" alt="editor" width="640px"/>
+
+Or you can use filters to quickly narrow down that policy item. 
+
+Press `/` to show the filter input and type your query.
+Press `Tab` to leave the input, and browse the results.
+
+<img src="./docs/filter.png" alt="filter" width="640px"/>
+
+**Note**: Filter applies to current browser settings, but you can switch to other browsers and the ilte
+
+If you've made changes that you don't want, you press `z` undo last edit, `r` to redo and `R` (`Shift+r`) to revert all changes.
+
+### Exporting Policies
+
+You can export the policies (including the edits) on your system without applying.
+
+Press `S` (`Shift+s`) to save the policy
+
+<img src="./docs/export.png" alt="uninstall" width="640px"/>
 
 ### Uninstalling Policies
 
-**Windows:**
-1.  Navigate to the [`uninstall/windows/`](./uninstall/) directory in this repository.
-2.  Run the `.reg` file corresponding to your browser (e.g., `uninstall_chrome.reg`). This will remove the registry keys added during installation.
-3.  Restart your browser or go to `chrome://policy` (or `edge://policy`, `brave://policy`) and click "Reload policies".
+If you want to delete all policies for the selected browser, press `U` (`Shift+u`).
 
-**macOS:**
-1.  Go to `System Settings` > `Privacy & Security` > `Profiles`.
-2.  Select the profile associated with your browser (e.g., "Chrome Debloat Policies").
-3.  Click the '-' (minus) button to remove the profile.
-4.  Restart your browser or go to `chrome://policy` (or `edge://policy`, `brave://policy`) and click "Reload policies".
+<img src="./docs/uninstall.png" alt="uninstall" width="640px"/>
 
-**Linux:**
-1.  Remove the policy JSON file from the browser-specific directory (you might need `sudo` rights):
-    *   **Chrome:** `sudo rm /etc/opt/chrome/policies/managed/chrome.json`
-    *   **Edge:** `sudo rm /etc/opt/edge/policies/managed/edge.json`
-    *   **Brave:** `sudo rm /etc/brave/policies/managed/brave.json`
-2.  Restart your browser or go to `chrome://policy` (or `edge://policy`, `brave://policy`) and click "Reload policies".
+> [!WARNING]
+> This is destructive. So make sure you save a copy of your policies.
 
 ## Policy Documentation
 

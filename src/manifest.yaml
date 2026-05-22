@@ -1,0 +1,334 @@
+policyGroups:
+  chromiumExt:
+    label: Extensions
+    targets: [ chrome, brave, edge ]
+    settings:
+      ExtensionManifestV2Availability: 2
+      ExtensionInstallForcelist: []
+  braveTelemetry:
+    name: Brave Telemetry
+    targets: [ brave ]
+    settings:
+      BraveP3AEnabled: false
+      BraveStatsPingEnabled: false
+  braveFeatures:
+    name: Brave Features
+    targets: [ brave ]
+    settings:
+      BraveAIChatEnabled: false
+      BraveNewsDisabled: true
+      BravePlaylistEnabled: false
+      BraveRewardsDisabled: true
+      BraveSpeedreaderEnabled: false
+      BraveSyncUrl: ""
+      BraveTalkDisabled: true
+      BraveVPNDisabled: true
+      BraveWalletDisabled: true
+      BraveWaybackMachineEnabled: false
+      BraveWebDiscoveryEnabled: false
+      TorDisabled: true
+  edgeTelemetry:
+    label: Edge Telemetry
+    targets: [ edge ]
+    settings:
+      ConfigureDoNotTrack: true
+      DiagnosticData: 0
+      Edge3PSerpTelemetryEnabled: false
+      ExperimentationAndConfigurationServiceControl: 0
+      PersonalizationReportingEnabled: false
+      UrlDiagnosticDataEnabled: false
+  edgeSignIn:
+    label: Edge Sign In
+    targets: [ edge ]
+    settings:
+      EdgeBlockSignInEnabled: true
+      ImplicitSignInEnabled: false
+      M365AuthPopupsInWorkEnabled: false
+      SeamlessWebToBrowserSignInEnabled: false
+      WebToBrowserSignInEnabled: false
+  edgeGenAI:
+    label: Edge Copilot
+    targets: [ edge ]
+    settings:
+      EdgeCopilotEnabled: false
+      Microsoft365CopilotChatIconEnabled: false
+      CopilotNewTabPageEnabled: false
+      ShareBrowsingHistoryWithCopilotSearchAllowed: false
+      AllowBrowsingWithCopilot: false
+      M365LinksAutoOpenCopilotEnabled: false
+      ComposeInlineEnabled: false
+      AIGenThemesEnabled: false
+      EdgeHistoryAISearchEnabled: false
+  edgeFeatures:
+    label: Edge Features
+    targets: [ edge ]
+    settings:
+      # Accessibility
+      LiveCaptionsAllowed: false
+      AccessibilityImageLabelsEnabled: false
+      # Address Bar
+      AddressBarTrendingSuggestEnabled: false
+      # Application Guard
+      ApplicationGuardFavoritesSyncEnabled: false
+      ApplicationGuardPassiveModeEnabled: false
+      ApplicationGuardTrafficIdentificationEnabled: false
+      ApplicationGuardUploadBlockingEnabled: false
+      # Edge Typo Protection
+      TyposquattingCheckerEnabled: false
+      # Edge Workspaces
+      EdgeWorkspacesEnabled: false
+      # Extensions
+      ControlDefaultStateOfAllowExtensionFromOtherStoresSettingEnabled: true
+      EdgeSafeHostingExtensionEnabled: false
+      ExtensionManifestV2Availability: true
+      # SmartScreen
+      SmartScreenDnsRequestsEnabled: false
+      SmartScreenEnabled: false
+      SmartScreenForTrustedDownloadsEnabled: false
+      SmartScreenPuaEnabled: false
+      # Scareware
+      ScarewareBlockerProtectionEnabled: false
+      ScarewareBlockerBlocksDetectedSitesEnabled: false
+      ScarewareBlockerSendDetectedSitesToSmartScreenEnabled: false
+      # Internet Explorer
+      InternetExplorerIntegrationLevel: 0
+      # Manageability
+      EdgeManagementEnabled: false
+      EdgeManagementExtensionsFeedbackEnabled: false
+      # Microsoft Office
+      QuickViewOfficeFilesEnabled: false
+      # New tab page
+      NewTabPageAllowedBackgroundTypes: 3
+      NewTabPageAppLauncherEnabled: false
+      NewTabPageBingChatEnabled: false
+      NewTabPageContentEnabled: false
+      NewTabPageHideDefaultTopSites: true
+      NewTabPagePrerenderEnabled: false
+      NewTabPageQuickLinksEnabled: false
+      NewTabPageManagedQuickLinks: false
+      # PDF
+      ShowAcrobatSubscriptionButton: false
+      # Additional
+      AlternateErrorPagesEnabled: false
+      BingAdsSuppression: true
+      DriveDisabled: true
+      EdgeAssetDeliveryServiceEnabled: false
+      EdgeCollectionsEnabled: false
+      EdgeDiscoverEnabled: false
+      EdgeEDropEnabled: false
+      EdgeSharedDeviceSupportEnabled: false
+      EdgeShoppingAssistantEnabled: false
+      EdgeWalletCheckoutEnabled: false
+      ForceBingSafeSearch: 0
+      HubsSidebarEnabled: false
+      InAppSupportEnabled: false
+      LiveTranslationAllowed: false
+      MicrosoftEdgeInsiderPromotionEnabled: false
+      MicrosoftEditorProofingEnabled: false
+      MicrosoftEditorSynonymsEnabled: false
+      ParcelTrackingEnabled: false
+      PersonalizeTopSitesInCustomizeSidebarEnabled: false
+      PictureInPictureOverlayEnabled: false
+      ReadAloudEnabled: false
+      SharedLinksEnabled: false
+      ShoppingListEnabled: false
+      ShowMicrosoftRewards: false
+      ShowRecommendationsEnabled: false
+      SpellcheckEnabled: false
+      TabServiceEnabled: false
+      TextPredictionEnabled: false
+      TranslateEnabled: true
+      UploadFromPhoneEnabled: false
+      VisualSearchEnabled: false
+  edgeDeprecated:
+    label: Edge Deprecated
+    targets: [ edge ]
+    settings:
+      AllowGamesMenu: false # deprecated
+      MicrosoftOfficeMenuEnabled: false # deprecated
+      ShowOfficeShortcutInFavoritesBar: false # deprecated
+      EdgeWalletEtreeEnabled: false # deprecated
+      PromotionalTabsEnabled: false # deprecated
+      WalletDonationEnabled: false # deprecated
+      WebWidgetAllowed: false # deprecated
+  edgeObsolete:
+    label: Edge Obsolete
+    targets: [ edge ]
+    settings:
+      LinkedAccountEnabled: false
+      AddressBarMicrosoftSearchInBingProviderEnabled: false
+      GamerModeEnabled: false
+      NewSmartScreenLibraryEnabled: false
+      OutlookHubMenuEnabled: false
+      ImmersiveReaderGrammarToolsEnabled: false
+      ImmersiveReaderPictureDictionaryEnabled: false
+      CryptoWalletEnabled: false
+      EdgeEnhanceImagesEnabled: false
+      EdgeFollowEnabled: false
+      MathSolverEnabled: false
+  chromiumTelemetry:
+    label: Telemetry
+    targets: [ chrome, brave, edge ]
+    settings:
+      UserSecurityAuthenticatedReporting: false
+      UserSecuritySignalsReporting: false
+      MetricsReportingEnabled: false # obsolete
+      FeedbackSurveysEnabled: false
+      UserFeedbackAllowed: false
+      SafeBrowsingExtendedReportingEnabled: false
+      SafeBrowsingSurveysEnabled: false
+  chromiumGenAI:
+    label: Generative AI
+    targets: [ chrome, brave, edge ]
+    settings:
+      AIModeSettings: 1
+      AutofillPredictionSettings: 2
+      CreateThemesSettings: 2
+      DevToolsGenAiSettings: 2
+      GeminiActOnWebSettings: 1
+      GeminiSettings: 1
+      GenAIInlineImageSettings: 2
+      GenAILocalFoundationalModelSettings: 1
+      GenAIPhotoEditingSettings: 2
+      GenAISmartGroupingSettings: 1 # allow grouping, but do not improve models
+      GenAIVcBackgroundSettings: 2
+      GenAIWallpaperSettings: 2
+      GenAiDefaultSettings: 2
+      HelpMeReadSettings: 2
+      HelpMeWriteSettings: 2
+      HistorySearchSettings: 2
+      SearchContentSharingSettings: 1
+      TabCompareSettings: 2
+      BuiltInAIAPIsEnabled: false
+  chromiumSiteShield:
+    label: Site-Shield
+    targets: [ chrome, brave, edge ]
+    settings:
+      DefaultGeolocationSetting: 2
+      DefaultLocalFontsSetting: 2
+      DefaultNotificationsSetting: 2
+      DefaultIdleDetectionSetting: 2
+      RelatedWebsiteSetsEnabled: false # deprecated
+      PreciseGeolocationAllowedForUrls:
+      - ""
+  chromiumSiteShieldSensors:
+    label: Site-Shield Sensors & Devices
+    targets: [ chrome, brave, edge ]
+    settings:
+      DefaultSensorsSetting: 2
+      DefaultSerialGuardSetting: 2
+      DefaultSmartCardConnectSetting: 2
+      DefaultWebBluetoothGuardSetting: 2
+      DefaultWebHidGuardSetting: 2
+      DefaultWebUsbGuardSetting: 2
+  chromiumSignInSync:
+    label: Sign-in and Sync
+    targets: [ chrome, brave, edge ]
+    settings:
+      BrowserSignin: 0
+      SyncDisabled: true
+  chromiumPassword:
+    label: Password Manager
+    targets: [ chrome, brave, edge ]
+    settings:
+      PasswordManagerEnabled: true
+      PasswordManagerPasskeysEnabled: true
+      PasswordSharingEnabled: false
+  chromiumMisc:
+    label: Miscellaneous
+    targets: [ chrome, brave, edge ]
+    settings:
+      # Network
+      BuiltInDnsClientEnabled: false
+      DnsOverHttpsMode: secure
+      # Additional
+      BackgroundModeEnabled: false
+      BrowserGuestModeEnabled: true
+      BrowserGuestModeEnforced: false
+      BrowserLabsEnabled: false
+      DefaultBrowserSettingEnabled: false
+      QuickAnswersDefinitionEnabled: false
+      QuickAnswersEnabled: false
+      QuickAnswersTranslationEnabled: false
+      ShoppingListEnabled: false
+      SuggestedContentEnabled: false
+      PromotionsEnabled: false
+
+extensions:
+  ublock:
+    name: uBlock Origin
+    id: cjpalhdlnbpafiamejdnhcphjbkeiagm
+    targets: [ brave ]
+    settings:
+      ExtensionManifestV2Availability: 2
+  ublockLite:
+    name: uBlock Origin Lite
+    id: ddkjiahejlhfcafbddmgiahcphecmpfh
+    targets: [ chrome ]
+  ublockEdge:
+    name: uBlock Origin
+    id: odfafepnkmbhccpbejgmiehpchacaeak
+    targets: [ edge ]
+    settings:
+      ExtensionManifestV2Availability: 2
+  isdcac:
+    name: I still don't care about cookies
+    id: edibdbjcniadpccecjdfdjjppcpchdlm
+    targets: [ chrome, brave, edge ]
+  cad:
+    name: Cookie AutoDelete
+    id: fhcgjolkccmbidfldomjliifgaodjagh
+    targets: [ brave, edge ]
+    settings:
+      ExtensionManifestV2Availability: 2
+  isdcacEdge:
+    name: I still don't care about cookies
+    id: kkacdgacpkediooahopgcbdahlpipheh
+    targets: [ edge ]
+  blankTabEdge:
+    name: Blank Tab
+    id: ihknoknoahjhldmpdoajjdkfjhddgpcd
+    targets: [ edge ]
+# presets enables the declared policy groups
+presets:
+  brave:
+    balanced:
+      policyGroups:
+      - braveTelemetry
+      - braveFeatures
+      - chromiumTelemetry
+      - chromiumGenAI
+      - chromiumSiteShield
+      - chromiumSignInSync
+      - chromiumMisc
+      extensions:
+      - ublock
+      - isdcac
+  chrome:
+    balanced:
+      policyGroups:
+      - chromiumTelemetry
+      - chromiumGenAI
+      - chromiumSiteShield
+      - chromiumSignInSync
+      - chromiumMisc
+      extensions:
+      - ublockLite
+      - isdcac
+  edge:
+    balanced:
+      policyGroups:
+      - edgeTelemetry
+      - edgeSignIn
+      - edgeGenAI
+      - edgeFeatures
+      - edgeDeprecated
+      - chromiumTelemetry
+      - chromiumGenAI
+      - chromiumSiteShield
+      - chromiumSignInSync
+      - chromiumMisc
+      extensions:
+      - ublockEdge
+      - isdcacEdge
+      - blankTabEdge
