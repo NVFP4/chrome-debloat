@@ -1,25 +1,12 @@
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
+
+use windows_registry::LOCAL_MACHINE;
 
 const ELEVATION_ATTEMPTED_ARG: &str = "--chrome-debloat-elevation-attempted";
-const ADMIN_CHECK_SCRIPT: &str = concat!(
-    "$identity = [Security.Principal.WindowsIdentity]::GetCurrent();",
-    "$principal = New-Object Security.Principal.WindowsPrincipal $identity;",
-    "if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {",
-    "exit 0",
-    "} else {",
-    "exit 1",
-    "}",
-);
-const CLIPBOARD_SCRIPT: &str = concat!(
-    "$ErrorActionPreference = 'Stop';",
-    "$OutputEncoding = [System.Text.UTF8Encoding]::new($false);",
-    "[Console]::OutputEncoding = $OutputEncoding;",
-    "$value = Get-Clipboard -Raw -Format Text;",
-    "if ($null -ne $value) { [Console]::Out.Write($value) }",
-);
+const SYSTEM_POLICY_ROOT: &str = r"SOFTWARE\Policies";
 
 pub fn relaunch_elevated_if_needed() -> bool {
     if elevation_was_already_attempted() {
@@ -48,33 +35,17 @@ pub fn needs_elevation() -> bool {
 }
 
 pub fn clipboard_text() -> Option<String> {
-    let output = powershell()
-        .arg("-Command")
-        .arg(CLIPBOARD_SCRIPT)
-        .stdin(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-
-    let text = match String::from_utf8(output.stdout) {
-        Ok(text) => text,
-        Err(error) => String::from_utf8_lossy(&error.into_bytes()).into_owned(),
-    };
-
-    (!text.is_empty()).then_some(text)
+    clipboard_win::get_clipboard_string()
+        .ok()
+        .filter(|text| !text.is_empty())
 }
 
 fn is_elevated() -> bool {
-    powershell()
-        .arg("-Command")
-        .arg(ADMIN_CHECK_SCRIPT)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
+    LOCAL_MACHINE
+        .options()
+        .write()
+        .open(SYSTEM_POLICY_ROOT)
+        .is_ok()
 }
 
 fn relaunch_command<I>(exe: &Path, args: I) -> Command
