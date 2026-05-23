@@ -1,37 +1,62 @@
-use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use windows_registry::{CURRENT_USER, Key, LOCAL_MACHINE};
 
 use crate::chromium::Browser;
-use crate::chromium::detection::BrowserInstall;
+use crate::chromium::detection::{BrowserDetectionError, BrowserDetectionResult, BrowserInstall};
 
-pub fn detect_browser(browser: Browser) -> Option<BrowserInstall> {
-    app_path(browser)
-        .or_else(|| {
-            common_install_paths(browser)
-                .into_iter()
-                .find(|path| path.exists())
-        })
-        .map(|path| BrowserInstall::new(browser, path))
+const HRESULT_FROM_WIN32_FILE_NOT_FOUND: i32 = -2147024894;
+const HRESULT_FROM_WIN32_PATH_NOT_FOUND: i32 = -2147024893;
+
+pub fn detect_browser(browser: Browser) -> BrowserDetectionResult {
+    let Some(path) = app_path(browser)? else {
+        return Ok(None);
+    };
+
+    if path_exists(&path)? {
+        Ok(Some(BrowserInstall::new(browser, path)))
+    } else {
+        Ok(None)
+    }
 }
 
-fn app_path(browser: Browser) -> Option<PathBuf> {
+fn app_path(browser: Browser) -> Result<Option<PathBuf>, BrowserDetectionError> {
     let exe_name = browser_exe_name(browser);
-    [LOCAL_MACHINE, CURRENT_USER]
-        .into_iter()
-        .find_map(|root| app_path_registry_value(root, exe_name))
-        .map(PathBuf::from)
+    for root in [LOCAL_MACHINE, CURRENT_USER] {
+        if let Some(path) = app_path_registry_value(root, exe_name)? {
+            return Ok(Some(PathBuf::from(path)));
+        }
+    }
+
+    Ok(None)
 }
 
-fn app_path_registry_value(root: &Key, exe_name: &str) -> Option<String> {
-    let key = root
-        .open(format!(
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe_name}"
-        ))
-        .ok()?;
+fn app_path_registry_value(
+    root: &Key,
+    exe_name: &str,
+) -> Result<Option<String>, BrowserDetectionError> {
+    let key_path = format!(r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe_name}");
+    let key = match root.open(&key_path) {
+        Ok(key) => key,
+        Err(error) if is_missing_key(error.code().0) => return Ok(None),
+        Err(error) => {
+            return Err(BrowserDetectionError::registry(
+                "open Windows app path registry key",
+                error.code().0,
+                error.to_string(),
+            ));
+        }
+    };
 
-    key.get_string("").ok()
+    match key.get_string("") {
+        Ok(path) => Ok(Some(path)),
+        Err(error) if is_missing_key(error.code().0) => Ok(None),
+        Err(error) => Err(BrowserDetectionError::registry(
+            "read Windows app path registry value",
+            error.code().0,
+            error.to_string(),
+        )),
+    }
 }
 
 fn browser_exe_name(browser: Browser) -> &'static str {
@@ -42,68 +67,18 @@ fn browser_exe_name(browser: Browser) -> &'static str {
     }
 }
 
-fn common_install_paths(browser: Browser) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-
-    match browser {
-        Browser::Brave => {
-            append_env_path(
-                &mut paths,
-                "ProgramFiles",
-                r"BraveSoftware\Brave-Browser\Application\brave.exe",
-            );
-            append_env_path(
-                &mut paths,
-                "ProgramFiles(x86)",
-                r"BraveSoftware\Brave-Browser\Application\brave.exe",
-            );
-            append_env_path(
-                &mut paths,
-                "LocalAppData",
-                r"BraveSoftware\Brave-Browser\Application\brave.exe",
-            );
-        }
-        Browser::Chrome => {
-            append_env_path(
-                &mut paths,
-                "ProgramFiles",
-                r"Google\Chrome\Application\chrome.exe",
-            );
-            append_env_path(
-                &mut paths,
-                "ProgramFiles(x86)",
-                r"Google\Chrome\Application\chrome.exe",
-            );
-            append_env_path(
-                &mut paths,
-                "LocalAppData",
-                r"Google\Chrome\Application\chrome.exe",
-            );
-        }
-        Browser::Edge => {
-            append_env_path(
-                &mut paths,
-                "ProgramFiles",
-                r"Microsoft\Edge\Application\msedge.exe",
-            );
-            append_env_path(
-                &mut paths,
-                "ProgramFiles(x86)",
-                r"Microsoft\Edge\Application\msedge.exe",
-            );
-            append_env_path(
-                &mut paths,
-                "LocalAppData",
-                r"Microsoft\Edge\Application\msedge.exe",
-            );
-        }
-    }
-
-    paths
+fn path_exists(path: &Path) -> Result<bool, BrowserDetectionError> {
+    path.try_exists()
+        .map_err(|source| BrowserDetectionError::Io {
+            action: "check Windows app path executable",
+            path: path.to_path_buf(),
+            source,
+        })
 }
 
-fn append_env_path(paths: &mut Vec<PathBuf>, variable: &str, suffix: &str) {
-    if let Some(root) = env::var_os(variable) {
-        paths.push(PathBuf::from(root).join(suffix));
-    }
+fn is_missing_key(code: i32) -> bool {
+    matches!(
+        code,
+        HRESULT_FROM_WIN32_FILE_NOT_FOUND | HRESULT_FROM_WIN32_PATH_NOT_FOUND
+    )
 }

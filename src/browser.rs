@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::chromium::Browser;
-use crate::chromium::detection::BrowserInstall;
+use crate::chromium::detection::{BrowserDetectionResult, BrowserInstall};
 use crate::chromium::policy::{self, BrowserPolicy, PolicyReadResult, PolicySet, PolicyValue};
 use crate::diff::{self, DiffCounts};
 use crate::history::EditHistory;
@@ -21,6 +21,7 @@ use crate::watcher::ManagedPolicyWatcher;
 pub struct BrowserState {
     pub browser: Browser,
     pub install: Option<BrowserInstall>,
+    pub install_error: Option<String>,
     pub policy: Option<BrowserPolicy>,
     pub policy_error: Option<String>,
     managed_policy_exists: bool,
@@ -41,10 +42,14 @@ pub enum ApplyResult {
 impl BrowserState {
     pub fn new(
         browser: Browser,
-        install: Option<BrowserInstall>,
+        install: BrowserDetectionResult,
         policy: PolicyReadResult,
         preset: PolicySet,
     ) -> Self {
+        let (install, install_error) = match install {
+            Ok(install) => (install, None),
+            Err(error) => (None, Some(error.to_string())),
+        };
         let (policy, policy_error) = match policy {
             Ok(policy) => (policy, None),
             Err(error) => (None, Some(error.to_string())),
@@ -71,6 +76,7 @@ impl BrowserState {
         Self {
             browser,
             install,
+            install_error,
             policy,
             policy_error,
             managed_policy_exists,
