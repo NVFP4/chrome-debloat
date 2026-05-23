@@ -7,7 +7,7 @@ use crate::chromium::{Browser, detection, policy};
 use crate::editor::{NewPolicyType, PolicyEditorState, PolicyKeyEditorState};
 use crate::manifest::Manifest;
 use crate::policy_tree::{EditablePolicyValue, PolicyTree, PolicyTreeRowKind, RowId};
-use crate::tui::action::Action;
+use crate::tui::action::{Action, ActionStep, BrowserTabIndex};
 use crate::tui::event::{DialogInput, PolicyInputMode};
 
 pub(crate) const REPORT_ISSUE_URL: &str = env!("CARGO_PKG_REPOSITORY");
@@ -393,7 +393,7 @@ impl App {
             Action::Quit => self.quit(),
             Action::Redraw => true,
             Action::Redo => self.redo(),
-            Action::ScrollHelp(delta, max_scroll) => self.scroll_help(delta, max_scroll),
+            Action::ScrollHelp { step, max_scroll } => self.scroll_help(step, max_scroll),
             Action::SelectTab(index) => self.select_browser_at(index),
             Action::StagePolicyRemoval => self.stage_policy_removal(),
             Action::Tick => self.refresh_awaiting_policy_changes(),
@@ -403,7 +403,8 @@ impl App {
         }
     }
 
-    fn select_browser_at(&mut self, index: usize) -> bool {
+    fn select_browser_at(&mut self, index: BrowserTabIndex) -> bool {
+        let index = index.get();
         if index >= self.browsers.len() {
             return false;
         }
@@ -416,7 +417,7 @@ impl App {
         self.active_browser != previous_browser || cursor_changed || editors_changed
     }
 
-    fn scroll_help(&mut self, delta: i16, max_scroll: u16) -> bool {
+    fn scroll_help(&mut self, step: ActionStep, max_scroll: u16) -> bool {
         let Some(dialog) = &mut self.tui.dialog else {
             return false;
         };
@@ -425,10 +426,9 @@ impl App {
         }
 
         let current_scroll = i32::from(dialog.scroll);
-        let requested_scroll = current_scroll + i32::from(delta);
+        let requested_scroll = current_scroll + i32::from(step.offset());
         let max_scroll = i32::from(max_scroll);
         let next_scroll = requested_scroll.clamp(0, max_scroll) as u16;
-
         if dialog.scroll == next_scroll {
             return false;
         }
@@ -445,12 +445,12 @@ impl App {
         changed
     }
 
-    fn move_policy_cursor(&mut self, delta: i16) -> bool {
+    fn move_policy_cursor(&mut self, step: ActionStep) -> bool {
         self.prepare_policy_view();
         let Some(next_cursor) = offset_cursor(
             self.visible_policy_row_ids(),
             self.tui.policy_cursor.as_ref(),
-            delta,
+            step,
         ) else {
             return false;
         };
@@ -890,17 +890,17 @@ impl App {
         true
     }
 
-    fn move_policy_type(&mut self, delta: i16) -> bool {
+    fn move_policy_type(&mut self, step: ActionStep) -> bool {
         let Some(editor) = &mut self.tui.policy_key_editor else {
             return false;
         };
 
-        editor.move_selection(delta)
+        editor.move_selection(step.offset())
     }
 
-    fn move_policy_group(&mut self, delta: i16) -> bool {
+    fn move_policy_group(&mut self, step: ActionStep) -> bool {
         if !self.tui.filter.query.is_empty() {
-            return self.move_filtered_policy_group(delta);
+            return self.move_filtered_policy_group(step);
         }
 
         let Some(cursor) = self.tui.policy_cursor.clone() else {
@@ -911,7 +911,7 @@ impl App {
             let Some(tree) = self.active_policy_tree() else {
                 return false;
             };
-            let Some(next_cursor) = tree.group_cursor(&cursor, delta) else {
+            let Some(next_cursor) = tree.group_cursor(&cursor, step.offset()) else {
                 return false;
             };
 
@@ -927,7 +927,7 @@ impl App {
         true
     }
 
-    fn move_filtered_policy_group(&mut self, delta: i16) -> bool {
+    fn move_filtered_policy_group(&mut self, step: ActionStep) -> bool {
         let Some(cursor) = self.tui.policy_cursor.clone() else {
             return false;
         };
@@ -937,7 +937,7 @@ impl App {
                 return false;
             };
             let Some(next_cursor) =
-                tree.filtered_group_cursor(&self.tui.filter.query, &cursor, delta)
+                tree.filtered_group_cursor(&self.tui.filter.query, &cursor, step.offset())
             else {
                 return false;
             };
@@ -1027,7 +1027,7 @@ impl App {
         }
     }
 
-    fn move_dialog_focus(&mut self, delta: i16) -> bool {
+    fn move_dialog_focus(&mut self, step: ActionStep) -> bool {
         let Some(kind) = self.tui.dialog.as_ref().map(|dialog| dialog.kind) else {
             return false;
         };
@@ -1041,7 +1041,7 @@ impl App {
         };
 
         let current = dialog.focused_button as i32;
-        let next = (current + i32::from(delta)).rem_euclid(button_count as i32);
+        let next = (current + i32::from(step.offset())).rem_euclid(button_count as i32);
         if dialog.focused_button == next as usize {
             return false;
         }
@@ -1361,7 +1361,7 @@ impl App {
     }
 }
 
-fn offset_cursor(cursors: &[RowId], current: Option<&RowId>, delta: i16) -> Option<RowId> {
+fn offset_cursor(cursors: &[RowId], current: Option<&RowId>, step: ActionStep) -> Option<RowId> {
     if cursors.is_empty() {
         return None;
     }
@@ -1370,7 +1370,7 @@ fn offset_cursor(cursors: &[RowId], current: Option<&RowId>, delta: i16) -> Opti
         .iter()
         .position(|cursor| Some(cursor) == current)
         .unwrap_or_default();
-    let requested_position = current_position as i32 + i32::from(delta);
+    let requested_position = current_position as i32 + i32::from(step.offset());
     let max_position = cursors.len().saturating_sub(1) as i32;
     let next_position = requested_position.clamp(0, max_position) as usize;
 

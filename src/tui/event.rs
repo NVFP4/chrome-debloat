@@ -15,7 +15,7 @@ use crossterm::event::{
 use crossterm::terminal;
 use ratatui::layout::Rect;
 
-use super::action::Action;
+use super::action::{Action, ActionStep, BrowserTabIndex};
 use super::ui_dialog::ButtonHit;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 use super::ui_elevation;
@@ -96,18 +96,18 @@ fn key_to_action(
         KeyCode::Char('z') => Action::Undo,
         KeyCode::Char('d') | KeyCode::Backspace => Action::StagePolicyRemoval,
         KeyCode::Char(' ') => Action::TogglePolicyPresence,
-        KeyCode::Char('[' | 'h') | KeyCode::Left => Action::MovePolicyGroup(-1),
-        KeyCode::Char(']' | 'l') | KeyCode::Right => Action::MovePolicyGroup(1),
-        KeyCode::Char('j') | KeyCode::Down => Action::MovePolicyCursor(1),
-        KeyCode::Char('k') | KeyCode::Up => Action::MovePolicyCursor(-1),
+        KeyCode::Char('[' | 'h') | KeyCode::Left => Action::MovePolicyGroup(ActionStep::PREVIOUS),
+        KeyCode::Char(']' | 'l') | KeyCode::Right => Action::MovePolicyGroup(ActionStep::NEXT),
+        KeyCode::Char('j') | KeyCode::Down => Action::MovePolicyCursor(ActionStep::NEXT),
+        KeyCode::Char('k') | KeyCode::Up => Action::MovePolicyCursor(ActionStep::PREVIOUS),
         KeyCode::Char('q') => Action::Quit,
         KeyCode::Esc => Action::CancelFilter,
         KeyCode::End => Action::PolicyCursorEnd,
         KeyCode::Home => Action::PolicyCursorStart,
-        KeyCode::PageDown => Action::MovePolicyCursor(8),
-        KeyCode::PageUp => Action::MovePolicyCursor(-8),
-        KeyCode::Char(character) if ('1'..='9').contains(&character) => {
-            Action::SelectTab(character as usize - '1' as usize)
+        KeyCode::PageDown => Action::MovePolicyCursor(ActionStep::NEXT_POLICY_PAGE),
+        KeyCode::PageUp => Action::MovePolicyCursor(ActionStep::PREVIOUS_POLICY_PAGE),
+        KeyCode::Char(character) => {
+            BrowserTabIndex::from_digit(character).map_or(Action::Noop, Action::SelectTab)
         }
         _ => Action::Noop,
     }
@@ -159,8 +159,8 @@ fn policy_key_key_to_action(key_event: KeyEvent) -> Action {
         KeyCode::Esc => Action::CancelPolicyEdit,
         KeyCode::Backspace => Action::BackspacePolicyEdit,
         KeyCode::Enter | KeyCode::Char(' ') => Action::CommitPolicyEdit,
-        KeyCode::Right | KeyCode::Tab => Action::MovePolicyType(1),
-        KeyCode::Left | KeyCode::BackTab => Action::MovePolicyType(-1),
+        KeyCode::Right | KeyCode::Tab => Action::MovePolicyType(ActionStep::NEXT),
+        KeyCode::Left | KeyCode::BackTab => Action::MovePolicyType(ActionStep::PREVIOUS),
         KeyCode::Char(character) => Action::InputPolicyEdit(character),
         _ => Action::Noop,
     }
@@ -178,8 +178,10 @@ fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput) -> Action {
             Action::LocateExportFile
         }
         KeyCode::Enter | KeyCode::Char(' ') => Action::ActivateDialogButton,
-        KeyCode::Char('h') | KeyCode::Left => Action::MoveDialogFocus(-1),
-        KeyCode::Char('l') | KeyCode::Right | KeyCode::Tab => Action::MoveDialogFocus(1),
+        KeyCode::Char('h') | KeyCode::Left => Action::MoveDialogFocus(ActionStep::PREVIOUS),
+        KeyCode::Char('l') | KeyCode::Right | KeyCode::Tab => {
+            Action::MoveDialogFocus(ActionStep::NEXT)
+        }
         KeyCode::Char('a') if dialog.kind == DialogKind::ConfirmApply && dialog.primary_enabled => {
             Action::ConfirmApply
         }
@@ -215,16 +217,16 @@ fn mouse_to_action(mouse_event: MouseEvent, app: &App) -> Action {
     match mouse_event.kind {
         MouseEventKind::ScrollUp => {
             return match app.dialog_input().map(|dialog| dialog.kind) {
-                Some(DialogKind::Help) => help_scroll_action(-1),
+                Some(DialogKind::Help) => help_scroll_action(ActionStep::PREVIOUS),
                 Some(_) => Action::Noop,
-                None => Action::MovePolicyCursor(-1),
+                None => Action::MovePolicyCursor(ActionStep::PREVIOUS),
             };
         }
         MouseEventKind::ScrollDown => {
             return match app.dialog_input().map(|dialog| dialog.kind) {
-                Some(DialogKind::Help) => help_scroll_action(1),
+                Some(DialogKind::Help) => help_scroll_action(ActionStep::NEXT),
                 Some(_) => Action::Noop,
-                None => Action::MovePolicyCursor(1),
+                None => Action::MovePolicyCursor(ActionStep::NEXT),
             };
         }
         MouseEventKind::Down(MouseButton::Left) => {}
@@ -306,18 +308,16 @@ struct DialogButtonHit {
 fn help_key_to_action(key_event: KeyEvent) -> Action {
     match key_event.code {
         KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => Action::CloseDialog,
-        KeyCode::Char('j') | KeyCode::Down => help_scroll_action(1),
-        KeyCode::Char('k') | KeyCode::Up => help_scroll_action(-1),
-        KeyCode::End => help_scroll_action(i16::MAX),
-        KeyCode::Home => help_scroll_action(i16::MIN),
-        KeyCode::PageDown => help_scroll_action(6),
-        KeyCode::PageUp => help_scroll_action(-6),
+        KeyCode::Char('j') | KeyCode::Down => help_scroll_action(ActionStep::NEXT),
+        KeyCode::Char('k') | KeyCode::Up => help_scroll_action(ActionStep::PREVIOUS),
+        KeyCode::PageDown => help_scroll_action(ActionStep::NEXT_HELP_PAGE),
+        KeyCode::PageUp => help_scroll_action(ActionStep::PREVIOUS_HELP_PAGE),
         _ => Action::Noop,
     }
 }
 
-fn help_scroll_action(delta: i16) -> Action {
+fn help_scroll_action(step: ActionStep) -> Action {
     let max_scroll = terminal_area().map(ui_help::max_scroll).unwrap_or_default();
 
-    Action::ScrollHelp(delta, max_scroll)
+    Action::ScrollHelp { step, max_scroll }
 }
