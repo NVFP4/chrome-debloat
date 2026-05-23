@@ -19,7 +19,7 @@ use super::action::{Action, ActionStep, BrowserTabIndex};
 use super::ui_dialog::ButtonHit;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 use super::ui_elevation;
-use super::{ui_apply, ui_export, ui_footer, ui_help, ui_quit, ui_revert, ui_uninstall};
+use super::{ui_apply, ui_export, ui_help, ui_quit, ui_revert, ui_uninstall};
 use crate::app::{App, DialogKind};
 
 #[derive(Debug, Clone, Copy)]
@@ -239,14 +239,7 @@ fn mouse_to_action(mouse_event: MouseEvent, app: &App) -> Action {
             .unwrap_or(Action::Noop);
     }
 
-    let Some(area) = terminal_area() else {
-        return Action::Noop;
-    };
-    if ui_footer::report_issue_hit(area, app, mouse_event.column, mouse_event.row) {
-        Action::OpenReportIssue
-    } else {
-        Action::Noop
-    }
+    Action::Noop
 }
 
 fn dialog_button_click_action(button: DialogButtonHit) -> Action {

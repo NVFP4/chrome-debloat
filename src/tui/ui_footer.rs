@@ -8,7 +8,7 @@ use super::styles;
 use super::ui_text::{blank, join_lines, render_space_between};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub(super) const REPORT_ISSUE: &str = "report issue";
+const REPORT_ISSUE: &str = "report issue";
 const INPUT_FOOTER: Style = Style::new().bg(Color::Cyan);
 const INPUT_TEXT: Style = Style::new().fg(Color::Black).bold();
 
@@ -64,59 +64,6 @@ fn normal_footer_lines(
     let left = normal_left_line(width.saturating_sub(right.width() + right_gap), new_label);
 
     (left, right)
-}
-
-pub(super) fn report_issue_hit(area: Rect, app: &crate::app::App, column: u16, row: u16) -> bool {
-    report_issue_link_area(area, app)
-        .is_some_and(|area| row == area.y && (area.x..area.right()).contains(&column))
-}
-
-pub(super) fn report_issue_link_area(area: Rect, app: &crate::app::App) -> Option<Rect> {
-    if app.input_active() {
-        return None;
-    }
-
-    let row_area = footer_row_area(area);
-    let (left, right) = footer_lines(row_area.width, app);
-    let right_width = right.width();
-    let left_width = left.width();
-    let left_present = left_width > 0;
-    let issue_width = REPORT_ISSUE.len();
-    let full_width = report_issue_line().width();
-    let right_visible = right_width == full_width
-        && (!left_present
-            || left_width.saturating_add(1).saturating_add(right_width)
-                <= usize::from(row_area.width));
-
-    if !right_visible {
-        return None;
-    }
-
-    let start = row_area
-        .right()
-        .saturating_sub(right_width.min(usize::from(u16::MAX)) as u16);
-
-    Some(Rect::new(
-        start,
-        row_area.y,
-        issue_width.min(usize::from(u16::MAX)) as u16,
-        1,
-    ))
-}
-
-fn footer_row_area(area: Rect) -> Rect {
-    bottom_row(area).inner(Margin {
-        horizontal: 1,
-        vertical: 0,
-    })
-}
-
-fn bottom_row(area: Rect) -> Rect {
-    Rect {
-        y: area.bottom().saturating_sub(1),
-        height: 1,
-        ..area
-    }
 }
 
 fn normal_right_line(available_width: usize) -> Line<'static> {

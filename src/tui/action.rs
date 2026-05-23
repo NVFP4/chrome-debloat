@@ -25,7 +25,6 @@ pub enum Action {
     Noop,
     OpenApplyDialog,
     OpenExportDialog,
-    OpenReportIssue,
     OpenRevertDialog,
     OpenUninstallDialog,
     Paste(String),
