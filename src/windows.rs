@@ -29,7 +29,6 @@ pub fn relaunch_elevated_if_needed() -> bool {
         return false;
     }
 
-    eprintln!("Requesting administrator permissions...");
     let Ok(exe) = env::current_exe() else {
         return false;
     };

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-use crate::browser::{ApplyResult, BrowserState};
+use crate::browser::{ApplyResult, BrowserState, UninstallResult};
 use crate::chromium::{Browser, detection, policy};
 use crate::editor::{NewPolicyType, PolicyEditorState, PolicyKeyEditorState};
 use crate::manifest::Manifest;
@@ -396,7 +396,7 @@ impl App {
             Action::ScrollHelp(delta, max_scroll) => self.scroll_help(delta, max_scroll),
             Action::SelectTab(index) => self.select_browser_at(index),
             Action::StagePolicyRemoval => self.stage_policy_removal(),
-            Action::Tick => self.refresh_awaiting_installs(),
+            Action::Tick => self.refresh_awaiting_policy_changes(),
             Action::ToggleHelp => self.toggle_help(),
             Action::TogglePolicyPresence => self.toggle_policy_presence(),
             Action::Undo => self.undo(),
@@ -1074,7 +1074,7 @@ impl App {
             DialogKind::ConfirmApply | DialogKind::ConfirmRevert => {
                 self.active_browser_state().is_dirty()
             }
-            DialogKind::ConfirmUninstall => true,
+            DialogKind::ConfirmUninstall => self.active_browser_state().managed_policy_exists(),
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             DialogKind::ElevatedPermissionsRequired => false,
         }
@@ -1225,16 +1225,22 @@ impl App {
         true
     }
 
-    fn refresh_awaiting_installs(&mut self) -> bool {
-        if !self.browsers.iter().any(BrowserState::awaiting_install) {
+    fn refresh_awaiting_policy_changes(&mut self) -> bool {
+        if !self
+            .browsers
+            .iter()
+            .any(BrowserState::awaiting_policy_change)
+        {
             return false;
         }
 
         let anchor = self.policy_cursor_anchor();
-        let changed = self
-            .browsers
-            .iter_mut()
-            .any(BrowserState::refresh_awaiting_install);
+        let mut changed = false;
+        let manifest = &self.manifest;
+        for state in &mut self.browsers {
+            let preset = manifest.balanced_preset(state.browser);
+            changed |= state.refresh_awaiting_policy_change(preset);
+        }
         if changed {
             self.sync_policy_cursor_to_anchor(anchor);
         }
@@ -1242,7 +1248,6 @@ impl App {
         changed
     }
 
-    #[cfg(not(target_os = "macos"))]
     fn confirm_uninstall(&mut self) -> bool {
         if self
             .tui
@@ -1259,9 +1264,24 @@ impl App {
         }
 
         match self.active_browser_state_mut().uninstall_policy() {
-            Ok(()) => {
+            #[cfg(not(target_os = "macos"))]
+            Ok(UninstallResult::Uninstalled) => {
+                let preset = self.manifest.balanced_preset(self.active_browser);
+                self.active_browser_state_mut()
+                    .use_missing_policy_defaults(preset);
                 self.move_policy_cursor_to_start();
                 self.tui.dialog = None;
+                true
+            }
+            #[cfg(target_os = "macos")]
+            Ok(UninstallResult::AwaitingUninstall) => {
+                self.tui.dialog = None;
+                true
+            }
+            Ok(UninstallResult::NoPolicy) => {
+                if let Some(dialog) = &mut self.tui.dialog {
+                    dialog.status = Some("Nothing to uninstall.".to_owned());
+                }
                 true
             }
             Err(error) => {
@@ -1271,29 +1291,6 @@ impl App {
                 true
             }
         }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn confirm_uninstall(&mut self) -> bool {
-        if self
-            .tui
-            .dialog
-            .as_ref()
-            .is_none_or(|dialog| dialog.kind != DialogKind::ConfirmUninstall)
-        {
-            return false;
-        }
-
-        match crate::macos::open_profiles_settings() {
-            Ok(()) => self.tui.dialog = None,
-            Err(error) => {
-                if let Some(dialog) = &mut self.tui.dialog {
-                    dialog.status = Some(error.to_string());
-                }
-            }
-        }
-
-        true
     }
 
     fn open_revert_dialog(&mut self) -> bool {

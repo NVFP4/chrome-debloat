@@ -26,9 +26,10 @@ pub struct BrowserState {
     pub policy_error: Option<String>,
     managed_policy_exists: bool,
     awaiting_install: bool,
+    awaiting_uninstall: bool,
     policy_tree_version: u64,
     #[cfg(target_os = "macos")]
-    install_watcher: Option<ManagedPolicyWatcher>,
+    managed_policy_watcher: Option<ManagedPolicyWatcher>,
     edits: EditHistory,
 }
 
@@ -37,6 +38,15 @@ pub enum ApplyResult {
     Applied,
     AwaitingInstall,
     NoChanges,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UninstallResult {
+    #[cfg(not(target_os = "macos"))]
+    Uninstalled,
+    #[cfg(target_os = "macos")]
+    AwaitingUninstall,
+    NoPolicy,
 }
 
 impl BrowserState {
@@ -58,17 +68,8 @@ impl BrowserState {
         let (policy, edits) = match (policy, policy_error.is_none() && !preset.is_empty()) {
             (Some(policy), _) => (Some(policy), EditHistory::default()),
             (None, true) => {
-                let baseline = PolicySet::new();
-                let mut edits = EditHistory::default();
-                edits.push(&baseline, preset);
-                (
-                    Some(BrowserPolicy {
-                        browser,
-                        source: policy::managed_location(browser),
-                        policies: baseline,
-                    }),
-                    edits,
-                )
+                let (policy, edits) = missing_policy_with_defaults(browser, preset);
+                (Some(policy), edits)
             }
             (None, false) => (None, EditHistory::default()),
         };
@@ -81,9 +82,10 @@ impl BrowserState {
             policy_error,
             managed_policy_exists,
             awaiting_install: false,
+            awaiting_uninstall: false,
             policy_tree_version: 0,
             #[cfg(target_os = "macos")]
-            install_watcher: None,
+            managed_policy_watcher: None,
             edits,
         }
     }
@@ -106,6 +108,14 @@ impl BrowserState {
 
     pub fn awaiting_install(&self) -> bool {
         self.awaiting_install && self.is_dirty()
+    }
+
+    pub const fn awaiting_uninstall(&self) -> bool {
+        self.awaiting_uninstall
+    }
+
+    pub const fn awaiting_policy_change(&self) -> bool {
+        self.awaiting_install || self.awaiting_uninstall
     }
 
     pub fn has_policy(&self) -> bool {
@@ -151,7 +161,7 @@ impl BrowserState {
         let changed = self.edits.undo(&policy.policies);
         if changed {
             self.bump_policy_tree_version();
-            self.clear_awaiting_install();
+            self.clear_awaiting_policy_change();
         }
 
         changed
@@ -164,18 +174,18 @@ impl BrowserState {
         let changed = self.edits.redo(&policy.policies);
         if changed {
             self.bump_policy_tree_version();
-            self.clear_awaiting_install();
+            self.clear_awaiting_policy_change();
         }
 
         changed
     }
 
     pub fn revert(&mut self) -> bool {
-        let changed = self.edits.revert() || self.awaiting_install;
+        let changed = self.edits.revert() || self.awaiting_install || self.awaiting_uninstall;
         if changed {
             self.bump_policy_tree_version();
         }
-        self.clear_awaiting_install();
+        self.clear_awaiting_policy_change();
 
         changed
     }
@@ -196,12 +206,13 @@ impl BrowserState {
             self.watch_managed_policy()?;
         }
         if let Err(error) = open_written_policy(&write) {
-            self.clear_awaiting_install();
+            self.clear_awaiting_policy_change();
             return Err(error);
         }
 
         if should_wait_for_managed_policy_install() {
             self.awaiting_install = true;
+            self.awaiting_uninstall = false;
             self.policy_error = None;
             return Ok(ApplyResult::AwaitingInstall);
         }
@@ -213,7 +224,7 @@ impl BrowserState {
         self.managed_policy_exists = true;
         self.edits.revert();
         self.bump_policy_tree_version();
-        self.clear_awaiting_install();
+        self.clear_awaiting_policy_change();
         self.policy_error = None;
 
         Ok(ApplyResult::Applied)
@@ -228,16 +239,24 @@ impl BrowserState {
         policy::export(self.browser, current, path).map_err(|error| error.to_string())
     }
 
-    pub fn refresh_awaiting_install(&mut self) -> bool {
-        if !self.awaiting_install {
+    pub fn refresh_awaiting_policy_change(&mut self, preset: PolicySet) -> bool {
+        if !self.awaiting_policy_change() {
             return false;
         }
         if !self.managed_policy_may_have_changed() {
             return false;
         }
 
+        if self.awaiting_uninstall {
+            return self.refresh_awaiting_uninstall(preset);
+        }
+
+        self.refresh_awaiting_install()
+    }
+
+    fn refresh_awaiting_install(&mut self) -> bool {
         let Some(policy) = &self.policy else {
-            self.clear_awaiting_install();
+            self.clear_awaiting_policy_change();
             return true;
         };
         let expected = self.edits.current(&policy.policies).clone();
@@ -249,7 +268,7 @@ impl BrowserState {
                 self.managed_policy_exists = true;
                 self.edits.revert();
                 self.bump_policy_tree_version();
-                self.clear_awaiting_install();
+                self.clear_awaiting_policy_change();
                 true
             }
             Ok(Some(updated)) => {
@@ -266,34 +285,74 @@ impl BrowserState {
                 changed
             }
             Ok(None) => false,
-            Err(error) => {
-                let error = error.to_string();
-                if self.policy_error.as_ref() == Some(&error) {
-                    return false;
-                }
+            Err(error) => self.set_policy_error(error.to_string()),
+        }
+    }
 
-                self.policy_error = Some(error);
+    fn refresh_awaiting_uninstall(&mut self, preset: PolicySet) -> bool {
+        match policy::read(self.browser) {
+            Ok(None) => {
+                self.use_missing_policy_defaults(preset);
                 true
             }
+            Ok(Some(updated)) => {
+                let changed = self.policy.as_ref().is_none_or(|policy| {
+                    policy.source != updated.source || policy.policies != updated.policies
+                }) || self.policy_error.is_some();
+                if changed {
+                    self.policy = Some(updated);
+                    self.policy_error = None;
+                    self.managed_policy_exists = true;
+                    self.bump_policy_tree_version();
+                }
+
+                changed
+            }
+            Err(error) => self.set_policy_error(error.to_string()),
         }
     }
 
     #[cfg(not(target_os = "macos"))]
-    pub fn uninstall_policy(&mut self) -> Result<(), String> {
+    pub fn uninstall_policy(&mut self) -> Result<UninstallResult, String> {
+        if !self.managed_policy_exists {
+            return Ok(UninstallResult::NoPolicy);
+        }
+
         policy::uninstall(self.browser).map_err(|error| error.to_string())?;
 
-        self.policy = Some(BrowserPolicy {
-            browser: self.browser,
-            source: policy::managed_location(self.browser),
-            policies: PolicySet::new(),
-        });
+        Ok(UninstallResult::Uninstalled)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn uninstall_policy(&mut self) -> Result<UninstallResult, String> {
+        if !self.managed_policy_exists {
+            return Ok(UninstallResult::NoPolicy);
+        }
+
+        self.watch_managed_policy()?;
+        if let Err(error) = crate::macos::open_profiles_settings() {
+            self.clear_awaiting_policy_change();
+            return Err(error.to_string());
+        }
+
+        self.awaiting_install = false;
+        self.awaiting_uninstall = true;
+        self.policy_error = None;
+        if self.edits.revert() {
+            self.bump_policy_tree_version();
+        }
+
+        Ok(UninstallResult::AwaitingUninstall)
+    }
+
+    pub fn use_missing_policy_defaults(&mut self, preset: PolicySet) {
+        let (policy, edits) = missing_policy_with_defaults(self.browser, preset);
+        self.policy = Some(policy);
         self.policy_error = None;
         self.managed_policy_exists = false;
-        self.edits.revert();
+        self.edits = edits;
         self.bump_policy_tree_version();
-        self.clear_awaiting_install();
-
-        Ok(())
+        self.clear_awaiting_policy_change();
     }
 
     pub fn stage_policy_removal_at(&mut self, cursor: &RowId) -> bool {
@@ -421,11 +480,21 @@ impl BrowserState {
         true
     }
 
-    fn clear_awaiting_install(&mut self) {
+    fn set_policy_error(&mut self, error: String) -> bool {
+        if self.policy_error.as_ref() == Some(&error) {
+            return false;
+        }
+
+        self.policy_error = Some(error);
+        true
+    }
+
+    fn clear_awaiting_policy_change(&mut self) {
         self.awaiting_install = false;
+        self.awaiting_uninstall = false;
         #[cfg(target_os = "macos")]
         {
-            self.install_watcher = None;
+            self.managed_policy_watcher = None;
         }
     }
 
@@ -436,7 +505,7 @@ impl BrowserState {
 
         self.edits.push(&policy.policies, policies);
         self.bump_policy_tree_version();
-        self.clear_awaiting_install();
+        self.clear_awaiting_policy_change();
     }
 
     fn bump_policy_tree_version(&mut self) {
@@ -446,7 +515,7 @@ impl BrowserState {
     fn managed_policy_may_have_changed(&mut self) -> bool {
         #[cfg(target_os = "macos")]
         {
-            self.install_watcher
+            self.managed_policy_watcher
                 .as_ref()
                 .is_some_and(ManagedPolicyWatcher::has_events)
         }
@@ -460,7 +529,7 @@ impl BrowserState {
     fn watch_managed_policy(&mut self) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
-            self.install_watcher = Some(
+            self.managed_policy_watcher = Some(
                 self.policy
                     .as_ref()
                     .and_then(managed_policy_path)
@@ -477,6 +546,24 @@ impl BrowserState {
             Ok(())
         }
     }
+}
+
+fn missing_policy_with_defaults(
+    browser: Browser,
+    preset: PolicySet,
+) -> (BrowserPolicy, EditHistory) {
+    let baseline = PolicySet::new();
+    let mut edits = EditHistory::default();
+    edits.push(&baseline, preset);
+
+    (
+        BrowserPolicy {
+            browser,
+            source: policy::managed_location(browser),
+            policies: baseline,
+        },
+        edits,
+    )
 }
 
 #[cfg(target_os = "macos")]

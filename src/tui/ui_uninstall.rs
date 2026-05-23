@@ -34,11 +34,15 @@ const UNINSTALL: ButtonSpec = ("o", "Open Settings");
 const CANCEL: ButtonSpec = ("esc", "Cancel");
 #[cfg(target_os = "macos")]
 const CANCEL: ButtonSpec = ("esc", "Cancel");
+const CLOSE: ButtonSpec = ("esc", "Close");
+
+const DIALOG_TITLE: &str = "Uninstall Policies";
 
 pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let Some(dialog) = app.dialog() else {
         return;
     };
+    let has_policy = app.active_browser_state().managed_policy_exists();
 
     ui_dialog::render(
         frame,
@@ -47,26 +51,27 @@ pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
             layout: LAYOUT,
             scroll: (0, 0),
             wrap: true,
-            content: dialog_text(dialog, app),
-            buttons: Some(ui_dialog::buttons_line(ui_dialog::confirm_buttons(
-                UNINSTALL,
-                CANCEL,
-                dialog.focused_button,
-            ))),
+            content: dialog_text(dialog, app, has_policy),
+            buttons: Some(buttons_line(has_policy, dialog.focused_button)),
         },
     );
 }
 
-pub(super) fn button_hit(area: Rect, column: u16, row: u16) -> Option<ButtonHit> {
-    ui_dialog::button_hit(
+pub(super) fn button_hit(has_policy: bool, area: Rect, column: u16, row: u16) -> Option<ButtonHit> {
+    ui_dialog::confirm_or_secondary_button_hit(
+        has_policy,
         area,
         LAYOUT,
-        ui_dialog::confirm_buttons(UNINSTALL, CANCEL, 0),
+        [UNINSTALL, secondary_button(has_policy)],
         (column, row),
     )
 }
 
-fn dialog_text(dialog: &DialogState, app: &App) -> Text<'static> {
+fn dialog_text(dialog: &DialogState, app: &App, has_policy: bool) -> Text<'static> {
+    if !has_policy {
+        return Text::from_iter(no_policy_text());
+    }
+
     Text::from_iter(
         confirm_uninstall_text(app, dialog.focused_button)
             .into_iter()
@@ -82,11 +87,21 @@ fn error_lines(dialog: &DialogState) -> impl Iterator<Item = Line<'static>> {
         .flat_map(|status| [Line::default(), Line::styled(status, ERROR)])
 }
 
+fn no_policy_text() -> [Line<'static>; 5] {
+    [
+        ui_dialog::title_line(DIALOG_TITLE),
+        Line::default(),
+        Line::styled("Nothing to uninstall", ui_dialog::BODY),
+        Line::default(),
+        Line::default(),
+    ]
+}
+
 #[cfg(not(target_os = "macos"))]
 fn confirm_uninstall_text(app: &App, _focused_button: usize) -> [Line<'static>; 5] {
     let browser = app.active_browser().name();
     [
-        ui_dialog::title_line("Confirm Uninstall"),
+        ui_dialog::title_line(DIALOG_TITLE),
         Line::default(),
         Line::from_iter([
             Span::styled("This will ", ui_dialog::BODY),
@@ -104,11 +119,23 @@ fn confirm_uninstall_text(app: &App, _focused_button: usize) -> [Line<'static>; 
     ]
 }
 
+fn buttons_line(has_policy: bool, focused_button: usize) -> Line<'static> {
+    ui_dialog::confirm_or_secondary_buttons_line(
+        has_policy,
+        [UNINSTALL, secondary_button(has_policy)],
+        focused_button,
+    )
+}
+
+fn secondary_button(has_policy: bool) -> ButtonSpec {
+    if has_policy { CANCEL } else { CLOSE }
+}
+
 #[cfg(target_os = "macos")]
 fn confirm_uninstall_text(app: &App, _focused_button: usize) -> [Line<'static>; 6] {
     let browser = app.active_browser().name();
     [
-        ui_dialog::title_line("Uninstall Policies"),
+        ui_dialog::title_line(DIALOG_TITLE),
         Line::default(),
         Line::from_iter([
             Span::styled("macOS requires policy profiles to be ", ui_dialog::BODY),

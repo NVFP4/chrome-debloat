@@ -187,11 +187,15 @@ fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput) -> Action {
             Action::ConfirmQuit
         }
         #[cfg(not(target_os = "macos"))]
-        KeyCode::Char('u') if dialog.kind == DialogKind::ConfirmUninstall => {
+        KeyCode::Char('u')
+            if dialog.kind == DialogKind::ConfirmUninstall && dialog.primary_enabled =>
+        {
             Action::ConfirmUninstall
         }
         #[cfg(target_os = "macos")]
-        KeyCode::Char('o') if dialog.kind == DialogKind::ConfirmUninstall => {
+        KeyCode::Char('o')
+            if dialog.kind == DialogKind::ConfirmUninstall && dialog.primary_enabled =>
+        {
             Action::ConfirmUninstall
         }
         KeyCode::Char('r')
@@ -274,7 +278,9 @@ fn dialog_button_at(dialog: DialogInput, column: u16, row: u16) -> Option<Dialog
             ui_revert::button_hit(dialog.primary_enabled, area, column, row)
         }
         DialogKind::ConfirmQuit => ui_quit::button_hit(area, column, row),
-        DialogKind::ConfirmUninstall => ui_uninstall::button_hit(area, column, row),
+        DialogKind::ConfirmUninstall => {
+            ui_uninstall::button_hit(dialog.primary_enabled, area, column, row)
+        }
         #[cfg(any(target_os = "linux", target_os = "windows"))]
         DialogKind::ElevatedPermissionsRequired => ui_elevation::button_hit(area, column, row),
     };
