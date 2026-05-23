@@ -81,6 +81,7 @@ function Remove-InstallFiles {
 
     if (Test-Path -LiteralPath $script:TempDir) {
         Remove-Item -LiteralPath $script:TempDir -Recurse -Force -ErrorAction SilentlyContinue
+        $script:TempDir = ""
     }
 }
 

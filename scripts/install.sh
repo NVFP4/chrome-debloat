@@ -23,11 +23,11 @@ err() {
 }
 
 info() {
-  printf '%b%s%b\n' "$cyan" "$1" "$reset"
+  printf '%bINFO%b: %s\n' "$cyan" "$reset" "$1" >&2
 }
 
 warn() {
-  printf '%b%s%b\n' "$yellow" "$1" "$reset"
+  printf '%bWARN%b: %s\n' "$yellow" "$reset" "$1" >&2
 }
 
 need() {
@@ -53,6 +53,7 @@ download() {
 cleanup() {
   if [ -n "$tmpdir" ]; then
     rm -rf "$tmpdir"
+    tmpdir=""
   fi
 }
 
@@ -99,17 +100,17 @@ detect_arch() {
 }
 
 download_app() {
-  tmpdir="$(mktemp -d)"
+  tmpdir="$(mktemp -d -t chrome-debloat)"
   asset="$binary-$platform-$arch.tar.gz"
   download_url="https://github.com/$repo/releases/latest/download/$asset"
   archive="$tmpdir/$asset"
   checksum="$archive.sha256"
   app="$tmpdir/$binary"
 
-  info "Downloading $asset..."
+  info "Downloading '$asset'"
   download "$download_url" "$archive"
   download "$download_url.sha256" "$checksum"
-  info "Verifying $asset..."
+  info "Verifying '$asset'"
   verify_checksum
   tar -xzf "$archive" -C "$tmpdir"
   chmod +x "$app"
@@ -138,17 +139,18 @@ verify_checksum() {
 }
 
 run_app() {
+  # dont exec here, we need to cleanup after app exit
   if [ "$platform" != "linux" ]; then
-    exec "$app"
+    "$app"
     return
   fi
 
   if [ "$(id -u)" = "0" ]; then
-    exec "$app"
+    "$app"
   else
     need sudo
     warn "Chrome Debloat needs sudo to write browser policies in /etc."
-    exec sudo "$app"
+    sudo "$app"
   fi
 }
 
@@ -158,6 +160,7 @@ main() {
   detect_arch
   download_app
   run_app
+  info 'BYE!'
 }
 
 main "$@"
