@@ -46,7 +46,7 @@ sh -c "$(curl -fsSL "https://debloat.yashg.dev/install.sh")"
 
 ### Windows
 ```sh
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://debloat.yashg.dev/install.sh | iex"
 ```
 
 Or download the binary from the [latest GitHub release](https://github.com/NVFP4/chrome-debloat/releases/latest) and run it directly.
