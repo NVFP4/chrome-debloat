@@ -100,7 +100,7 @@ detect_arch() {
 }
 
 download_app() {
-  tmpdir="$(mktemp -d -t chrome-debloat)"
+  tmpdir="$(mktemp -d)"
   asset="$binary-$platform-$arch.tar.gz"
   download_url="https://github.com/$repo/releases/latest/download/$asset"
   archive="$tmpdir/$asset"
