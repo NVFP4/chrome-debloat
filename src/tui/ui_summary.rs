@@ -10,6 +10,7 @@ use crate::browser::BrowserState;
 
 const SUMMARY: Style = styles::GRAY;
 const NOTICE: Style = styles::YELLOW;
+const BROWSER_DETECTION_FAILED: &str = "Browser detection failed, but policy can still be applied. Recommended policies have been selected.";
 const BROWSER_NOT_INSTALLED: &str = "Browser not installed, but policy can still be applied. Recommended policies have been selected.";
 const POLICY_NOT_FOUND: &str =
     "No policy found on the system. Recommended policies have been selected.";
@@ -37,9 +38,7 @@ fn summary_lines(state: &BrowserState, width: u16) -> Vec<Line<'static>> {
             policy.source.to_string(),
             width,
         ),
-        (Some(_), _) | (None, None) => {
-            std::iter::once(Line::styled(missing_policy_text(state), NOTICE)).collect()
-        }
+        (Some(_), _) | (None, None) => missing_policy_lines(state),
         (None, Some(error)) => [
             Line::styled("policy read failed", SUMMARY),
             Line::styled(error.clone(), SUMMARY),
@@ -49,11 +48,18 @@ fn summary_lines(state: &BrowserState, width: u16) -> Vec<Line<'static>> {
     }
 }
 
-fn missing_policy_text(state: &BrowserState) -> &'static str {
-    if !state.detected() {
-        BROWSER_NOT_INSTALLED
+fn missing_policy_lines(state: &BrowserState) -> Vec<Line<'static>> {
+    if let Some(error) = &state.install_error {
+        [
+            Line::styled(BROWSER_DETECTION_FAILED, NOTICE),
+            Line::styled(error.clone(), SUMMARY),
+        ]
+        .into_iter()
+        .collect()
+    } else if !state.detected() {
+        std::iter::once(Line::styled(BROWSER_NOT_INSTALLED, NOTICE)).collect()
     } else {
-        POLICY_NOT_FOUND
+        std::iter::once(Line::styled(POLICY_NOT_FOUND, NOTICE)).collect()
     }
 }
 

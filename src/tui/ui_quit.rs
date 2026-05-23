@@ -3,7 +3,7 @@ use ratatui::layout::{Margin, Rect};
 use ratatui::text::{Line, Text};
 
 use super::styles;
-use super::ui_dialog::{self, ButtonHit, ButtonSpec, DialogLayout, DialogRender};
+use super::ui_dialog::{self, ButtonSpec, DialogLayout, DialogRender};
 use crate::app::{App, DialogKind};
 
 const LAYOUT: DialogLayout = DialogLayout {
@@ -45,15 +45,6 @@ pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
             ))),
         },
     );
-}
-
-pub(super) fn button_hit(area: Rect, column: u16, row: u16) -> Option<ButtonHit> {
-    ui_dialog::button_hit(
-        area,
-        LAYOUT,
-        ui_dialog::confirm_buttons(QUIT, CANCEL, 0),
-        (column, row),
-    )
 }
 
 fn dialog_text() -> Text<'static> {

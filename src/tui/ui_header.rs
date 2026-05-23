@@ -79,6 +79,9 @@ fn meta_line(state: &BrowserState) -> Line<'static> {
             state
                 .awaiting_install()
                 .then(|| Line::styled("AWAITING INSTALL", styles::CYAN.bold())),
+            state
+                .awaiting_uninstall()
+                .then(|| Line::styled("AWAITING UNINSTALL", styles::CYAN.bold())),
             (!diff.is_empty()).then(|| diff_line(diff)),
         ]
         .into_iter()

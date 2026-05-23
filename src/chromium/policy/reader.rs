@@ -15,10 +15,3 @@ pub type PolicyReadResult = Result<Option<BrowserPolicy>, PolicyReadError>;
 pub fn read(browser: Browser) -> PolicyReadResult {
     platform::read(browser)
 }
-
-// pub fn read_all() -> HashMap<Browser, PolicyReadResult> {
-//     Browser::all()
-//         .into_iter()
-//         .map(|browser| (browser, read(browser)))
-//         .collect()
-// }

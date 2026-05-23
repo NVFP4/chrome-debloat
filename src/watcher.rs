@@ -17,7 +17,7 @@ impl ManagedPolicyWatcher {
         let target_path = path.clone();
         let mut watcher =
             notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-                if event.is_ok_and(|event| is_managed_policy_write_event(&event, &target_path)) {
+                if event.is_ok_and(|event| is_managed_policy_change_event(&event, &target_path)) {
                     let _ = sender.send(());
                 }
             })?;
@@ -43,10 +43,11 @@ impl ManagedPolicyWatcher {
     }
 }
 
-fn is_managed_policy_write_event(event: &notify::Event, target_path: &Path) -> bool {
+fn is_managed_policy_change_event(event: &notify::Event, target_path: &Path) -> bool {
     matches!(
         event.kind,
         EventKind::Create(_)
+            | EventKind::Remove(_)
             | EventKind::Modify(ModifyKind::Name(_))
             | EventKind::Modify(ModifyKind::Data(
                 DataChange::Any | DataChange::Size | DataChange::Content | DataChange::Other

@@ -4,17 +4,6 @@ use std::path::Path;
 use std::process::Command;
 
 #[cfg(any(unix, target_os = "windows"))]
-pub(crate) fn open_url(url: &str) -> io::Result<()> {
-    let status = open_command(url).status()?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other("failed to open URL"))
-    }
-}
-
-#[cfg(any(unix, target_os = "windows"))]
 pub(crate) fn locate_file(path: &Path) -> io::Result<()> {
     let status = locate_command(path).status()?;
 
@@ -22,6 +11,17 @@ pub(crate) fn locate_file(path: &Path) -> io::Result<()> {
         Ok(())
     } else {
         Err(io::Error::other("failed to locate file"))
+    }
+}
+
+#[cfg(any(unix, target_os = "windows"))]
+pub(crate) fn open_url(url: &str) -> io::Result<()> {
+    let status = open_command(url).status()?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other("failed to open URL"))
     }
 }
 
@@ -64,8 +64,8 @@ fn locate_command(path: &Path) -> Command {
 
 #[cfg(target_os = "windows")]
 fn open_command(url: &str) -> Command {
-    let mut command = Command::new("cmd");
-    command.args(["/C", "start", "", url]);
+    let mut command = Command::new("rundll32");
+    command.args(["url.dll,FileProtocolHandler", url]);
     command
 }
 

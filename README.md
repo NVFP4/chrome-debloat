@@ -5,7 +5,7 @@ A TUI tool for automatically configuring and applying policies to Chromium-based
 Instantly disable telemetry, promotional clutter, and browser bloat while maintaining full usability. Includes a built-in editor for fine-tuning policies to your needs.
 
 > [!WARNING]
-> The old policy generation script is available in `legacy` branch, but it will not be maintained.
+> The old policy generation script is available in [`legacy`](https://github.com/NVFP4/chrome-debloat/tree/legacy) branch, but it will not be maintained.
 
 ## Features
 
@@ -45,6 +45,7 @@ sh -c "$(curl -fsSL "https://debloat.yashg.dev/install.sh")"
 ```
 
 ### Windows
+
 ```sh
 powershell -ExecutionPolicy Bypass -c "irm https://debloat.yashg.dev/install.ps1 | iex"
 ```
