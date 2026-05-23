@@ -4,7 +4,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 
 use super::styles;
-use super::ui_dialog::{self, ButtonHit, ButtonSpec, DialogLayout, DialogRender};
+use super::ui_dialog::{self, ButtonSpec, DialogLayout, DialogRender};
 use crate::app::{App, DialogKind};
 use crate::diff::DiffCounts;
 
@@ -51,21 +51,6 @@ pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
             )),
         },
     );
-}
-
-pub(super) fn button_hit(
-    has_changes: bool,
-    area: Rect,
-    column: u16,
-    row: u16,
-) -> Option<ButtonHit> {
-    ui_dialog::confirm_or_secondary_button_hit(
-        has_changes,
-        area,
-        LAYOUT,
-        [APPLY, CANCEL],
-        (column, row),
-    )
 }
 
 fn dialog_text(app: &App) -> Text<'static> {

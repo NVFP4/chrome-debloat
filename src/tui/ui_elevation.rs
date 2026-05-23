@@ -4,7 +4,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 
 use super::styles;
-use super::ui_dialog::{self, ButtonHit, ButtonSpec, DialogLayout, DialogRender};
+use super::ui_dialog::{self, ButtonSpec, DialogLayout, DialogRender};
 use crate::app::{App, DialogKind};
 
 const LAYOUT: DialogLayout = DialogLayout {
@@ -42,15 +42,6 @@ pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
             buttons: Some(ui_dialog::buttons_line(ui_dialog::secondary_button(OKAY))),
         },
     );
-}
-
-pub(super) fn button_hit(area: Rect, column: u16, row: u16) -> Option<ButtonHit> {
-    ui_dialog::button_hit(
-        area,
-        LAYOUT,
-        ui_dialog::secondary_button(OKAY),
-        (column, row),
-    )
 }
 
 fn dialog_text() -> Text<'static> {

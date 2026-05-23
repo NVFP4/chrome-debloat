@@ -10,6 +10,8 @@ use crate::policy_tree::{EditablePolicyValue, PolicyTree, PolicyTreeRowKind, Row
 use crate::tui::action::{Action, ActionStep, BrowserTabIndex};
 use crate::tui::event::{DialogInput, PolicyInputMode};
 
+pub(crate) const REPORT_ISSUE_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/issues");
+
 #[derive(Debug)]
 pub struct App {
     manifest: Manifest,
@@ -145,7 +147,7 @@ impl App {
         &self.browsers[self.active_browser_index()]
     }
 
-    pub(crate) fn update_view_state(&mut self) {
+    fn refresh_policy_view(&mut self) {
         self.update_policy_tree();
         self.update_visible_policy_rows();
     }
@@ -357,7 +359,7 @@ impl App {
     }
 
     pub fn handle_action(&mut self, action: Action) -> bool {
-        match action {
+        let updated = match action {
             Action::BackspaceFilter => self.backspace_filter(),
             Action::CloseDialog => self.close_dialog(),
             Action::BackspacePolicyEdit => self.backspace_policy_edit(),
@@ -378,6 +380,7 @@ impl App {
             Action::MoveDialogFocus(delta) => self.move_dialog_focus(delta),
             Action::OpenApplyDialog => self.open_apply_dialog(),
             Action::OpenExportDialog => self.open_export_dialog(),
+            Action::OpenReportIssue => self.open_report_issue(),
             Action::OpenRevertDialog => self.open_revert_dialog(),
             Action::OpenUninstallDialog => self.open_uninstall_dialog(),
             Action::Paste(text) => self.paste(text),
@@ -398,7 +401,13 @@ impl App {
             Action::ToggleHelp => self.toggle_help(),
             Action::TogglePolicyPresence => self.toggle_policy_presence(),
             Action::Undo => self.undo(),
+        };
+
+        if updated {
+            self.refresh_policy_view();
         }
+
+        updated
     }
 
     fn select_browser_at(&mut self, index: BrowserTabIndex) -> bool {
@@ -444,7 +453,7 @@ impl App {
     }
 
     fn move_policy_cursor(&mut self, step: ActionStep) -> bool {
-        self.update_view_state();
+        self.refresh_policy_view();
         let Some(next_cursor) = offset_cursor(
             self.visible_policy_row_ids(),
             self.tui.policy_cursor.as_ref(),
@@ -463,7 +472,7 @@ impl App {
     }
 
     fn move_policy_cursor_to_start(&mut self) -> bool {
-        self.update_view_state();
+        self.refresh_policy_view();
         let next_cursor = self.visible_policy_row_ids().first().cloned();
         if self.tui.policy_cursor == next_cursor {
             return false;
@@ -475,7 +484,7 @@ impl App {
     }
 
     fn move_policy_cursor_to_end(&mut self) -> bool {
-        self.update_view_state();
+        self.refresh_policy_view();
         let next_cursor = self.visible_policy_row_ids().last().cloned();
         if self.tui.policy_cursor == next_cursor {
             return false;
@@ -487,7 +496,7 @@ impl App {
     }
 
     fn policy_cursor_anchor(&mut self) -> CursorAnchor {
-        self.update_view_state();
+        self.refresh_policy_view();
         let cursor = self.tui.policy_cursor.clone();
         let visible_index = cursor
             .as_ref()
@@ -505,7 +514,7 @@ impl App {
     }
 
     fn sync_policy_cursor_to_filter(&mut self) -> bool {
-        self.update_view_state();
+        self.refresh_policy_view();
         let Some(next_cursor) = nearest_cursor(
             self.visible_policy_row_ids(),
             self.tui.policy_cursor.as_ref(),
@@ -523,7 +532,7 @@ impl App {
     }
 
     fn sync_policy_cursor_to_anchor(&mut self, anchor: CursorAnchor) -> bool {
-        self.update_view_state();
+        self.refresh_policy_view();
         let next_cursor = anchored_cursor(
             self.visible_policy_row_ids(),
             anchor.cursor.as_ref(),
@@ -538,7 +547,7 @@ impl App {
     }
 
     fn sync_policy_cursor_to_first_filter_match(&mut self) -> bool {
-        self.update_view_state();
+        self.refresh_policy_view();
         let Some(next_cursor) = self.visible_policy_row_ids().first().cloned() else {
             let changed = self.tui.policy_cursor.is_some();
             self.tui.policy_cursor = None;
@@ -553,7 +562,7 @@ impl App {
     }
 
     fn policy_cursor_is_visible(&mut self, cursor: &RowId) -> bool {
-        self.update_view_state();
+        self.refresh_policy_view();
         self.visible_policy_row_ids()
             .iter()
             .any(|visible_cursor| visible_cursor == cursor)
@@ -904,7 +913,7 @@ impl App {
         let Some(cursor) = self.tui.policy_cursor.clone() else {
             return false;
         };
-        self.update_view_state();
+        self.refresh_policy_view();
         let next_cursor = {
             let Some(tree) = self.active_policy_tree() else {
                 return false;
@@ -929,7 +938,7 @@ impl App {
         let Some(cursor) = self.tui.policy_cursor.clone() else {
             return false;
         };
-        self.update_view_state();
+        self.refresh_policy_view();
         let next_cursor = {
             let Some(tree) = self.active_policy_tree() else {
                 return false;
@@ -1125,6 +1134,10 @@ impl App {
                 true
             }
         }
+    }
+
+    fn open_report_issue(&self) -> bool {
+        crate::opener::open_url(REPORT_ISSUE_URL).is_ok()
     }
 
     fn default_export_path(&self) -> String {

@@ -18,6 +18,7 @@ use crossterm::terminal::{
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Rect;
 
 use super::{event, ui};
 use crate::app::App;
@@ -108,19 +109,16 @@ pub fn run(mut terminal: TuiTerminal, app: &mut App) -> Result<()> {
 fn run_loop(terminal: &mut TuiTerminal, app: &mut App) -> Result<()> {
     render(terminal, app)?;
     while !app.should_quit() {
-        if tick(app)? {
+        if tick(terminal, app)? {
             render(terminal, app)?;
         }
     }
     Ok(())
 }
 
-fn tick(app: &mut App) -> Result<bool> {
-    let action = event::read_action(app, TICK_RATE)?;
+fn tick(terminal: &mut TuiTerminal, app: &mut App) -> Result<bool> {
+    let action = event::read_action(app, TICK_RATE, terminal_area(terminal)?)?;
     let changed = app.handle_action(action);
-    if changed {
-        app.update_view_state();
-    }
     Ok(changed)
 }
 
@@ -130,6 +128,12 @@ fn render(terminal: &mut TuiTerminal, app: &App) -> Result<()> {
         .context("draw terminal frame")?;
 
     Ok(())
+}
+
+fn terminal_area(terminal: &TuiTerminal) -> Result<Rect> {
+    let size = terminal.size().context("query terminal size")?;
+
+    Ok(Rect::new(0, 0, size.width, size.height))
 }
 
 fn restore(terminal: &mut TuiTerminal) -> Result<()> {

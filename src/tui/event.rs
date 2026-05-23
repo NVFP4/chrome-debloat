@@ -12,14 +12,10 @@ use crossterm::event::{
     MouseEvent,
     MouseEventKind,
 };
-use crossterm::terminal;
 use ratatui::layout::Rect;
 
 use super::action::{Action, ActionStep, BrowserTabIndex};
-use super::ui_dialog::ButtonHit;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
-use super::ui_elevation;
-use super::{ui_apply, ui_export, ui_help, ui_quit, ui_revert, ui_uninstall};
+use super::ui::{self, HitTarget};
 use crate::app::{App, DialogKind};
 
 #[derive(Debug, Clone, Copy)]
@@ -35,7 +31,7 @@ pub enum PolicyInputMode {
     Key,
 }
 
-pub fn read_action(app: &App, tick_rate: Duration) -> Result<Action> {
+pub fn read_action(app: &App, tick_rate: Duration, area: Rect) -> Result<Action> {
     if !event::poll(tick_rate).context("poll terminal event")? {
         return Ok(Action::Tick);
     }
@@ -51,9 +47,10 @@ pub fn read_action(app: &App, tick_rate: Duration) -> Result<Action> {
                 key_event,
                 app.dialog_input(),
                 app.policy_input_mode(),
+                area,
             ))
         }
-        Event::Mouse(mouse_event) => Ok(mouse_to_action(mouse_event, app)),
+        Event::Mouse(mouse_event) => Ok(mouse_to_action(mouse_event, app, area)),
         Event::Resize(_, _) => Ok(Action::Redraw),
         Event::Paste(text) => Ok(Action::Paste(text)),
         Event::FocusGained | Event::FocusLost => Ok(Action::Noop),
@@ -64,6 +61,7 @@ fn key_to_action(
     key_event: KeyEvent,
     dialog: Option<DialogInput>,
     policy_input: Option<PolicyInputMode>,
+    area: Rect,
 ) -> Action {
     if key_event.kind == KeyEventKind::Release {
         return Action::Noop;
@@ -76,7 +74,7 @@ fn key_to_action(
     }
 
     if let Some(dialog) = dialog {
-        return dialog_key_to_action(key_event, dialog);
+        return dialog_key_to_action(key_event, dialog, area);
     }
 
     if let Some(policy_input) = policy_input {
@@ -166,9 +164,9 @@ fn policy_key_key_to_action(key_event: KeyEvent) -> Action {
     }
 }
 
-fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput) -> Action {
+fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput, area: Rect) -> Action {
     if dialog.kind == DialogKind::Help {
-        return help_key_to_action(key_event);
+        return help_key_to_action(key_event, area);
     }
 
     match key_event.code {
@@ -213,104 +211,47 @@ fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput) -> Action {
     }
 }
 
-fn mouse_to_action(mouse_event: MouseEvent, app: &App) -> Action {
+fn mouse_to_action(mouse_event: MouseEvent, app: &App, area: Rect) -> Action {
     match mouse_event.kind {
-        MouseEventKind::ScrollUp => {
-            return match app.dialog_input().map(|dialog| dialog.kind) {
-                Some(DialogKind::Help) => help_scroll_action(ActionStep::PREVIOUS),
-                Some(_) => Action::Noop,
-                None => Action::MovePolicyCursor(ActionStep::PREVIOUS),
-            };
-        }
-        MouseEventKind::ScrollDown => {
-            return match app.dialog_input().map(|dialog| dialog.kind) {
-                Some(DialogKind::Help) => help_scroll_action(ActionStep::NEXT),
-                Some(_) => Action::Noop,
-                None => Action::MovePolicyCursor(ActionStep::NEXT),
-            };
-        }
-        MouseEventKind::Down(MouseButton::Left) => {}
-        _ => return Action::Noop,
-    }
-
-    if let Some(dialog) = app.dialog_input() {
-        return dialog_button_at(dialog, mouse_event.column, mouse_event.row)
-            .map(dialog_button_click_action)
-            .unwrap_or(Action::Noop);
-    }
-
-    Action::Noop
-}
-
-fn dialog_button_click_action(button: DialogButtonHit) -> Action {
-    if button.hit == ButtonHit::SECONDARY {
-        return Action::CloseDialog;
-    }
-
-    if button.hit != ButtonHit::PRIMARY {
-        return Action::Noop;
-    }
-
-    match button.dialog_kind {
-        DialogKind::Help => Action::Noop,
-        DialogKind::ExportFile => Action::LocateExportFile,
-        DialogKind::ConfirmApply => Action::ConfirmApply,
-        DialogKind::ConfirmQuit => Action::ConfirmQuit,
-        DialogKind::ConfirmUninstall => Action::ConfirmUninstall,
-        DialogKind::ConfirmRevert => Action::ConfirmRevert,
-        #[cfg(any(target_os = "linux", target_os = "windows"))]
-        DialogKind::ElevatedPermissionsRequired => Action::CloseDialog,
-    }
-}
-
-fn dialog_button_at(dialog: DialogInput, column: u16, row: u16) -> Option<DialogButtonHit> {
-    let area = terminal_area()?;
-    let hit = match dialog.kind {
-        DialogKind::Help => None,
-        DialogKind::ExportFile => ui_export::button_hit(dialog.primary_enabled, area, column, row),
-        DialogKind::ConfirmApply => ui_apply::button_hit(dialog.primary_enabled, area, column, row),
-        DialogKind::ConfirmRevert => {
-            ui_revert::button_hit(dialog.primary_enabled, area, column, row)
-        }
-        DialogKind::ConfirmQuit => ui_quit::button_hit(area, column, row),
-        DialogKind::ConfirmUninstall => {
-            ui_uninstall::button_hit(dialog.primary_enabled, area, column, row)
-        }
-        #[cfg(any(target_os = "linux", target_os = "windows"))]
-        DialogKind::ElevatedPermissionsRequired => ui_elevation::button_hit(area, column, row),
-    };
-
-    hit.map(|hit| DialogButtonHit {
-        dialog_kind: dialog.kind,
-        hit,
-    })
-}
-
-fn terminal_area() -> Option<Rect> {
-    let (width, height) = terminal::size().ok()?;
-
-    Some(Rect::new(0, 0, width, height))
-}
-
-#[derive(Debug, Clone, Copy)]
-struct DialogButtonHit {
-    dialog_kind: DialogKind,
-    hit: ButtonHit,
-}
-
-fn help_key_to_action(key_event: KeyEvent) -> Action {
-    match key_event.code {
-        KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => Action::CloseDialog,
-        KeyCode::Char('j') | KeyCode::Down => help_scroll_action(ActionStep::NEXT),
-        KeyCode::Char('k') | KeyCode::Up => help_scroll_action(ActionStep::PREVIOUS),
-        KeyCode::PageDown => help_scroll_action(ActionStep::NEXT_HELP_PAGE),
-        KeyCode::PageUp => help_scroll_action(ActionStep::PREVIOUS_HELP_PAGE),
+        MouseEventKind::ScrollUp => match app.dialog_input().map(|dialog| dialog.kind) {
+            Some(DialogKind::Help) => help_scroll_action(ActionStep::PREVIOUS, area),
+            Some(_) => Action::Noop,
+            None => Action::MovePolicyCursor(ActionStep::PREVIOUS),
+        },
+        MouseEventKind::ScrollDown => match app.dialog_input().map(|dialog| dialog.kind) {
+            Some(DialogKind::Help) => help_scroll_action(ActionStep::NEXT, area),
+            Some(_) => Action::Noop,
+            None => Action::MovePolicyCursor(ActionStep::NEXT),
+        },
+        MouseEventKind::Down(MouseButton::Left) => mouse_click_action(mouse_event, app, area),
         _ => Action::Noop,
     }
 }
 
-fn help_scroll_action(step: ActionStep) -> Action {
-    let max_scroll = terminal_area().map(ui_help::max_scroll).unwrap_or_default();
+fn mouse_click_action(mouse_event: MouseEvent, app: &App, area: Rect) -> Action {
+    ui::hit_test(app, area, mouse_event.column, mouse_event.row)
+        .map_or(Action::Noop, hit_target_action)
+}
+
+fn hit_target_action(target: HitTarget) -> Action {
+    match target {
+        HitTarget::ReportIssue => Action::OpenReportIssue,
+    }
+}
+
+fn help_key_to_action(key_event: KeyEvent, area: Rect) -> Action {
+    match key_event.code {
+        KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => Action::CloseDialog,
+        KeyCode::Char('j') | KeyCode::Down => help_scroll_action(ActionStep::NEXT, area),
+        KeyCode::Char('k') | KeyCode::Up => help_scroll_action(ActionStep::PREVIOUS, area),
+        KeyCode::PageDown => help_scroll_action(ActionStep::NEXT_HELP_PAGE, area),
+        KeyCode::PageUp => help_scroll_action(ActionStep::PREVIOUS_HELP_PAGE, area),
+        _ => Action::Noop,
+    }
+}
+
+fn help_scroll_action(step: ActionStep, area: Rect) -> Action {
+    let max_scroll = ui::help_max_scroll(area);
 
     Action::ScrollHelp { step, max_scroll }
 }

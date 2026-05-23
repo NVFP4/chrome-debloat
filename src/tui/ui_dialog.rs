@@ -40,7 +40,7 @@ pub(super) struct DialogRender {
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Button {
-    hit: ButtonHit,
+    kind: ButtonKind,
     key: &'static str,
     label: &'static str,
     focused: bool,
@@ -48,11 +48,9 @@ pub(super) struct Button {
 
 pub(super) type ButtonSpec = (&'static str, &'static str);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct ButtonHit(usize);
-
-impl ButtonHit {
-    pub(super) const PRIMARY: Self = Self(0);
-    pub(super) const SECONDARY: Self = Self(1);
+enum ButtonKind {
+    Primary,
+    Secondary,
 }
 
 pub(super) fn render(frame: &mut Frame<'_>, area: Rect, render: DialogRender) {
@@ -147,13 +145,13 @@ pub(super) fn confirm_buttons(
 ) -> [Button; 2] {
     [
         Button::new(
-            ButtonHit::PRIMARY,
+            ButtonKind::Primary,
             primary.0,
             primary.1,
             focused_button == 0,
         ),
         Button::new(
-            ButtonHit::SECONDARY,
+            ButtonKind::Secondary,
             secondary.0,
             secondary.1,
             focused_button == 1,
@@ -163,7 +161,7 @@ pub(super) fn confirm_buttons(
 
 pub(super) fn secondary_button(secondary: ButtonSpec) -> [Button; 1] {
     [Button::new(
-        ButtonHit::SECONDARY,
+        ButtonKind::Secondary,
         secondary.0,
         secondary.1,
         true,
@@ -181,51 +179,6 @@ pub(super) fn confirm_or_secondary_buttons_line(
     } else {
         buttons_line(secondary_button(secondary))
     }
-}
-
-pub(super) fn confirm_or_secondary_button_hit(
-    has_primary: bool,
-    area: Rect,
-    layout: DialogLayout,
-    buttons: [ButtonSpec; 2],
-    position: (u16, u16),
-) -> Option<ButtonHit> {
-    let [primary, secondary] = buttons;
-    if has_primary {
-        button_hit(
-            area,
-            layout,
-            confirm_buttons(primary, secondary, 0),
-            position,
-        )
-    } else {
-        button_hit(area, layout, secondary_button(secondary), position)
-    }
-}
-
-pub(super) fn button_hit<const N: usize>(
-    area: Rect,
-    layout: DialogLayout,
-    buttons: [Button; N],
-    position: (u16, u16),
-) -> Option<ButtonHit> {
-    let (column, row) = position;
-    let content_area = content_area(area, layout);
-    let button_row = bottom_row(content_area)?;
-    if row != button_row.y {
-        return None;
-    }
-
-    let mut start = content_area.x;
-    for button in buttons {
-        if button_contains(button, start, column) {
-            return Some(button.hit);
-        }
-
-        start = start.saturating_add(button.width()).saturating_add(2);
-    }
-
-    None
 }
 
 fn content_and_button_areas(area: Rect, has_buttons: bool) -> (Rect, Option<Rect>) {
@@ -256,33 +209,20 @@ fn bottom_row(area: Rect) -> Option<Rect> {
     })
 }
 
-fn button_contains(button: Button, start: u16, column: u16) -> bool {
-    (start..start.saturating_add(button.width())).contains(&column)
-}
-
 impl Button {
-    pub(super) const fn new(
-        hit: ButtonHit,
-        key: &'static str,
-        label: &'static str,
-        focused: bool,
-    ) -> Self {
+    const fn new(kind: ButtonKind, key: &'static str, label: &'static str, focused: bool) -> Self {
         Self {
-            hit,
+            kind,
             key,
             label,
             focused,
         }
     }
 
-    fn width(self) -> u16 {
-        (self.key.len() + self.label.len() + 5).min(usize::from(u16::MAX)) as u16
-    }
-
     fn line(self) -> Line<'static> {
         let (button_style, key_style, border_style) = if self.focused {
             (FOCUSED_BUTTON, FOCUSED_BUTTON, FOCUSED_BUTTON)
-        } else if self.hit == ButtonHit::PRIMARY {
+        } else if self.kind == ButtonKind::Primary {
             (PRIMARY_BUTTON, PRIMARY_BUTTON, PRIMARY_BUTTON)
         } else {
             (BUTTON, KEY, BUTTON_BORDER)
