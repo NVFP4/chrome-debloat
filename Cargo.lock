@@ -121,7 +121,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrome-debloat"
-version = "0.1.5-alpha.1"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "clipboard-win",
