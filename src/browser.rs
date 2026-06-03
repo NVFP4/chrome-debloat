@@ -217,11 +217,13 @@ impl BrowserState {
             return Ok(ApplyResult::AwaitingInstall);
         }
 
-        if let Some(policy) = &mut self.policy {
-            policy.source = write.target;
-            policy.policies = current;
-            self.edits = PolicyStage::new(manifest, self.browser, &policy.policies);
-        }
+        let policy = self
+            .policy
+            .as_mut()
+            .expect("policy remains present after apply_policy_changes entry check");
+        policy.source = write.target;
+        policy.policies = current;
+        self.edits = PolicyStage::new(manifest, self.browser, &policy.policies);
         self.managed_policy_exists = true;
         self.first_missing_current = None;
         self.bump_policy_tree_version();

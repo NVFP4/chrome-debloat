@@ -5,7 +5,7 @@ use ratatui::text::{Line, Span, Text};
 
 use super::styles;
 use super::ui_dialog::{self, ButtonSpec, DialogLayout, DialogRender};
-use crate::app::{App, DialogKind};
+use crate::app::{App, DialogState};
 use crate::diff::DiffCounts;
 
 const LAYOUT: DialogLayout = DialogLayout {
@@ -29,14 +29,7 @@ const IMPORTANT: Style = styles::CYAN.add_modifier(ratatui::style::Modifier::BOL
 const APPLY: ButtonSpec = ("a", "Apply");
 const CANCEL: ButtonSpec = ("esc", "Cancel");
 
-pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let Some(dialog) = app.dialog() else {
-        return;
-    };
-    if dialog.kind != DialogKind::ConfirmApply {
-        return;
-    }
-
+pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App, dialog: &DialogState) {
     ui_dialog::render(
         frame,
         area,
@@ -44,7 +37,7 @@ pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
             layout: LAYOUT,
             scroll: (0, 0),
             wrap: true,
-            content: dialog_text(app),
+            content: dialog_text(app, dialog),
             buttons: Some(buttons_line(
                 !app.active_browser_state().diff_counts().is_empty(),
                 dialog.focused_button,
@@ -53,19 +46,28 @@ pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
     );
 }
 
-fn dialog_text(app: &App) -> Text<'static> {
+fn dialog_text(app: &App, dialog: &DialogState) -> Text<'static> {
     let diff = app.active_browser_state().diff_counts();
 
     if diff.is_empty() {
-        Text::from_iter(no_changes_lines(app).into_iter().chain(status_lines(app)))
+        Text::from_iter(
+            no_changes_lines(app)
+                .into_iter()
+                .chain(status_lines(dialog)),
+        )
     } else {
-        Text::from_iter(apply_lines(app, diff).into_iter().chain(status_lines(app)))
+        Text::from_iter(
+            apply_lines(app, diff)
+                .into_iter()
+                .chain(status_lines(dialog)),
+        )
     }
 }
 
-fn status_lines(app: &App) -> impl Iterator<Item = Line<'static>> {
-    app.dialog()
-        .and_then(|dialog| dialog.status.clone())
+fn status_lines(dialog: &DialogState) -> impl Iterator<Item = Line<'static>> {
+    dialog
+        .status
+        .clone()
         .into_iter()
         .flat_map(|status| [Line::default(), Line::styled(status, STATUS)])
 }

@@ -46,14 +46,16 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
 
     if let Some(dialog) = app.dialog() {
         match dialog.kind {
-            DialogKind::Help => ui_help::render(frame, area, app),
-            DialogKind::ConfirmApply => ui_apply::render(frame, area, app),
-            DialogKind::ExportFile => ui_export::render(frame, area, app),
-            DialogKind::ConfirmQuit => ui_quit::render(frame, area, app),
-            DialogKind::ConfirmRevert => ui_revert::render(frame, area, app),
-            DialogKind::ConfirmUninstall => ui_uninstall::render(frame, area, app),
+            DialogKind::Help => ui_help::render(frame, area, app, dialog),
+            DialogKind::ConfirmApply => ui_apply::render(frame, area, app, dialog),
+            DialogKind::ExportFile => ui_export::render(frame, area, app, dialog),
+            DialogKind::ConfirmQuit => ui_quit::render(frame, area, app, dialog),
+            DialogKind::ConfirmRevert => ui_revert::render(frame, area, app, dialog),
+            DialogKind::ConfirmUninstall => ui_uninstall::render(frame, area, app, dialog),
             #[cfg(any(target_os = "linux", target_os = "windows"))]
-            DialogKind::ElevatedPermissionsRequired => ui_elevation::render(frame, area, app),
+            DialogKind::ElevatedPermissionsRequired => {
+                ui_elevation::render(frame, area, app, dialog)
+            }
         }
     }
 }

@@ -745,7 +745,9 @@ fn display_list_items<'a>(
             restore: item.current_index.is_none().then(|| {
                 Arc::new(ListRestore {
                     source: RestoreSource::Baseline,
-                    index: item.baseline_index.unwrap_or_default(),
+                    index: item
+                        .baseline_index
+                        .expect("deleted list diff items always carry a baseline index"),
                     value: Arc::new(item.value.clone()),
                 })
             }),

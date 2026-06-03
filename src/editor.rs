@@ -23,6 +23,11 @@ pub(crate) struct NewListItemEditor {
     pub(crate) indent: usize,
 }
 
+pub(crate) enum PolicyEditorCommitTarget {
+    Existing(RowId),
+    NewListItem(NewListItemEditor),
+}
+
 impl PolicyEditorState {
     pub(crate) fn new(cursor: RowId, value: EditablePolicyValue) -> Self {
         Self {
@@ -81,6 +86,20 @@ impl PolicyEditorState {
                 insert_after,
                 indent,
             } => Some(NewListItemEditor {
+                source_cursor: self.cursor.clone(),
+                insert_after: insert_after.clone(),
+                indent: *indent,
+            }),
+        }
+    }
+
+    pub(crate) fn commit_target(&self) -> PolicyEditorCommitTarget {
+        match &self.target {
+            PolicyEditorTarget::Existing => PolicyEditorCommitTarget::Existing(self.cursor.clone()),
+            PolicyEditorTarget::NewListItem {
+                insert_after,
+                indent,
+            } => PolicyEditorCommitTarget::NewListItem(NewListItemEditor {
                 source_cursor: self.cursor.clone(),
                 insert_after: insert_after.clone(),
                 indent: *indent,

@@ -4,7 +4,7 @@ use ratatui::text::{Line, Text};
 
 use super::styles;
 use super::ui_dialog::{self, ButtonSpec, DialogLayout, DialogRender};
-use crate::app::{App, DialogKind};
+use crate::app::{App, DialogState};
 
 const LAYOUT: DialogLayout = DialogLayout {
     width_percent: 70,
@@ -22,14 +22,7 @@ const LAYOUT: DialogLayout = DialogLayout {
 const QUIT: ButtonSpec = ("q", "Quit");
 const CANCEL: ButtonSpec = ("esc", "Cancel");
 
-pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let Some(dialog) = app.dialog() else {
-        return;
-    };
-    if dialog.kind != DialogKind::ConfirmQuit {
-        return;
-    }
-
+pub fn render(frame: &mut Frame<'_>, area: Rect, _app: &App, dialog: &DialogState) {
     ui_dialog::render(
         frame,
         area,
