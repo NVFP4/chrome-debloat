@@ -2,6 +2,16 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      release_bump:
+        description: Version bump to release
+        type: choice
+        required: true
+        default: patch
+        options:
+        - patch
+        - minor
+        - major
 
 concurrency:
   group: release
@@ -73,13 +83,62 @@ jobs:
 
     - name: Prepare release version
       shell: bash
+      env:
+        RELEASE_BUMP: ${{ inputs.release_bump }}
       run: |
         git fetch --force --tags
         version="$(cargo metadata --no-deps --format-version 1 \
           | jq -er --arg name "$PACKAGE_NAME" '.packages[] | select(.name == $name) | .version')"
 
-        if [[ "$version" == *-* ]]; then
-          cargo release release \
+        if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.+)?$ ]]; then
+          echo "Unsupported version format: $version" >&2
+          exit 1
+        fi
+
+        major="${BASH_REMATCH[1]}"
+        minor="${BASH_REMATCH[2]}"
+        patch="${BASH_REMATCH[3]}"
+        prerelease="${BASH_REMATCH[4]:-}"
+        target=""
+
+        if [[ -z "$prerelease" ]]; then
+          current_tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$current_tag^{commit}" >/dev/null; then
+            tag_commit="$(git rev-list -n 1 "refs/tags/$current_tag")"
+            head_commit="$(git rev-parse HEAD)"
+
+            if [ "$tag_commit" = "$head_commit" ]; then
+              target="$version"
+            fi
+          fi
+        fi
+
+        if [[ -z "$target" ]]; then
+          case "$RELEASE_BUMP" in
+            patch)
+              if [[ -n "$prerelease" ]]; then
+                target="$major.$minor.$patch"
+              else
+                target="$major.$minor.$((patch + 1))"
+              fi
+              ;;
+            minor)
+              target="$major.$((minor + 1)).0"
+              ;;
+            major)
+              target="$((major + 1)).0.0"
+              ;;
+            *)
+              echo "Invalid release bump: $RELEASE_BUMP" >&2
+              exit 1
+              ;;
+          esac
+        fi
+
+        if [[ "$target" = "$version" ]]; then
+          echo "Version $version is already prepared for release."
+        else
+          cargo release "$target" \
             --execute \
             --no-confirm \
             --no-publish \
