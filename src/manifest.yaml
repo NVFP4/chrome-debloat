@@ -80,7 +80,6 @@ policyGroups:
       # Extensions
       ControlDefaultStateOfAllowExtensionFromOtherStoresSettingEnabled: true
       EdgeSafeHostingExtensionEnabled: false
-      ExtensionManifestV2Availability: true
       # SmartScreen
       SmartScreenDnsRequestsEnabled: false
       SmartScreenEnabled: false
