@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository contains a terminal user interface application written in Rust (v1.95, edition 2024) and Ratatui (v0.30+).
+This repository contains a terminal user interface application written in Rust (v1.96.0, edition 2024) and Ratatui (v0.30+).
 
 ## Project Structure
 

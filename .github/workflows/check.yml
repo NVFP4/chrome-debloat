@@ -41,7 +41,7 @@ jobs:
       - name: Install Rust
         uses: taiki-e/install-action@v2
         with:
-          tool: rust@1.95.0+clippy
+          tool: rust@1.96.0+clippy
 
       - name: Install nightly rustfmt
         uses: taiki-e/install-action@v2
@@ -57,13 +57,13 @@ jobs:
         run: cargo +nightly fmt --all --check
 
       - name: Clippy
-        run: cargo +1.95.0 clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo +1.96.0 clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Build
-        run: cargo +1.95.0 build --workspace --all-features --release --locked
+        run: cargo +1.96.0 build --workspace --all-features --release --locked
 
       - name: Test
-        run: cargo +1.95.0 test --workspace --all-features
+        run: cargo +1.96.0 test --workspace --all-features
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
