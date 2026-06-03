@@ -26,9 +26,15 @@ src/
 - `cargo build --workspace --all-features`
 - `cargo test --workspace --all-features`
 
-Prefer to cross-compile when validating Windows behavior:
+Cross compile commands on macOS:
 
-- `cargo xwin clippy --workspace --all-targets --all-features -- -D warnings`
+**Linux**
+- `cross clippy --target x86_64-unknown-linux-gnu --all-targets --all-features -- -D warnings`
+- `cross build --release --target x86_64-unknown-linux-gnu`
+
+**Windows**
+
+- `cargo xwin clippy --target x86_64-pc-windows-msvc --all-targets --all-features -- -D warnings`
 - `cargo xwin build --release --target x86_64-pc-windows-msvc`
 
 Note: we use nightly rustfmt for enabling `unstable_features`

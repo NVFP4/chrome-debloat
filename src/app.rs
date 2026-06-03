@@ -1268,8 +1268,9 @@ impl App {
             #[cfg(not(target_os = "macos"))]
             Ok(UninstallResult::Uninstalled) => {
                 let preset = self.manifest.balanced_preset(self.active_browser());
-                self.active_browser_state_mut()
-                    .use_missing_policy_defaults(&self.manifest, preset);
+                let active_browser_index = self.active_browser_index;
+                let manifest = &self.manifest;
+                self.browsers[active_browser_index].use_missing_policy_defaults(manifest, preset);
                 self.move_policy_cursor_to_start();
                 self.tui.dialog = None;
                 true
