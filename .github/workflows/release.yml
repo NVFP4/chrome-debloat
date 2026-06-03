@@ -32,7 +32,7 @@ jobs:
         ref: main
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.95.0
+      uses: dtolnay/rust-toolchain@1.96.0
       with:
         components: clippy
 
@@ -45,13 +45,13 @@ jobs:
       run: cargo +nightly fmt --all --check
 
     - name: Clippy
-      run: cargo +1.95.0 clippy --workspace --all-targets --all-features -- -D warnings
+      run: cargo +1.96.0 clippy --workspace --all-targets --all-features -- -D warnings
 
     - name: Build
-      run: cargo +1.95.0 build --workspace --all-features --locked
+      run: cargo +1.96.0 build --workspace --all-features --locked
 
     - name: Test
-      run: cargo +1.95.0 test --workspace --all-features
+      run: cargo +1.96.0 test --workspace --all-features
 
   prepare:
     name: Prepare release
@@ -69,7 +69,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.95.0
+      uses: dtolnay/rust-toolchain@1.96.0
 
     - name: Install cargo-release
       uses: taiki-e/install-action@v2
@@ -225,7 +225,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.tag }}
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.95.0
+      uses: dtolnay/rust-toolchain@1.96.0
       with:
         targets: ${{ matrix.target }}
 
@@ -307,7 +307,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.95.0
+      uses: dtolnay/rust-toolchain@1.96.0
 
     - name: Install cargo-release
       uses: taiki-e/install-action@v2
