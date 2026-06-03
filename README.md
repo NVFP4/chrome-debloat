@@ -28,11 +28,11 @@ Instantly disable telemetry, promotional clutter, and browser bloat while mainta
 
 ## Supported Browsers
 
-| Browser | Windows | macOS | Linux |
-|---------|---------|-------|-------|
-| Google Chrome | ✅ | ✅ | ✅ |
-| Microsoft Edge | ✅ | ✅ | ✅ |
-| Brave | ✅ | ✅ | ✅ |
+| Browser        | Windows | macOS | Linux |
+| -------------- | ------- | ----- | ----- |
+| Google Chrome  | ✅      | ✅    | ✅    |
+| Microsoft Edge | ✅      | ✅    | ✅    |
+| Brave          | ✅      | ✅    | ✅    |
 
 ## Quick Start
 
@@ -61,7 +61,6 @@ On first launch, recommended profiles are pre-selected by default.
 Press `a` to apply these profiles directly for the current selected browser.
 
 <img src="./docs/first-launch.png" alt="first launch" width="640px"/>
-
 
 > [!WARNING]
 > On Windows, the policy will be applied automatically.
@@ -106,7 +105,7 @@ Press `enter` to edit the value of a policy item
 
 <img src="./docs/editor.png" alt="editor" width="640px"/>
 
-Or you can use filters to quickly narrow down that policy item. 
+Or you can use filters to quickly narrow down that policy item.
 
 Press `/` to show the filter input and type your query.
 Press `Tab` to leave the input, and browse the results.
