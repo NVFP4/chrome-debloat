@@ -8,11 +8,11 @@ mod browser;
 mod chromium;
 mod diff;
 mod editor;
-mod history;
 #[cfg(target_os = "macos")]
 mod macos;
 mod manifest;
 mod opener;
+mod policy_stage;
 mod policy_tree;
 mod tui;
 #[cfg(target_os = "macos")]

@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 
-use crate::chromium::policy::{PolicySet, PolicyValue};
+use crate::chromium::policy::PolicyValue;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DiffCounts {
@@ -31,27 +31,6 @@ impl DiffCounts {
     }
 }
 
-pub fn counts(baseline: &PolicySet, current: &PolicySet) -> DiffCounts {
-    let added = current
-        .keys()
-        .filter(|key| !baseline.contains_key(*key))
-        .count();
-    let edited = current
-        .iter()
-        .filter(|(key, value)| baseline.get(*key).is_some_and(|base| base != *value))
-        .count();
-    let deleted = baseline
-        .keys()
-        .filter(|key| !current.contains_key(*key))
-        .count();
-
-    DiffCounts {
-        added: clamp_count(added),
-        edited: clamp_count(edited),
-        deleted: clamp_count(deleted),
-    }
-}
-
 pub fn status(baseline: Option<&PolicyValue>, current: Option<&PolicyValue>) -> DiffStatus {
     match (baseline, current) {
         (None, Some(_)) => DiffStatus::Added,
@@ -60,17 +39,6 @@ pub fn status(baseline: Option<&PolicyValue>, current: Option<&PolicyValue>) -> 
         (Some(_), Some(_)) => DiffStatus::Edited,
         (None, None) => DiffStatus::Applied,
     }
-}
-
-pub fn visible_policy_keys<'a>(
-    baseline: &'a PolicySet,
-    current: &'a PolicySet,
-) -> BTreeSet<&'a str> {
-    baseline
-        .keys()
-        .map(String::as_str)
-        .chain(current.keys().map(String::as_str))
-        .collect()
 }
 
 pub fn list_items<'a>(
@@ -127,8 +95,4 @@ pub fn list_items<'a>(
             }),
     );
     items
-}
-
-fn clamp_count(count: usize) -> u16 {
-    count.min(usize::from(u16::MAX)) as u16
 }
