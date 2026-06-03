@@ -23,6 +23,9 @@ mod windows;
 use anyhow::Result;
 use app::App;
 
+#[global_allocator]
+static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() -> Result<()> {
     #[cfg(target_os = "windows")]
     if windows::relaunch_elevated_if_needed() {
