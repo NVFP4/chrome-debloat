@@ -61,10 +61,10 @@ Note: we use nightly rustfmt for enabling `unstable_features`
 
 **Errors And Safety**
 
-- NEVER use `unsafe` unless it is required.
+- NEVER use `unsafe` unless it is absolutely required.
 - ALWAYS isolate required `unsafe`, document the safety invariant, and test the boundary.
 - NEVER use `panic()` or `unwrap()` outside tests and prototypes.
-- PREFER `expect(...)` only for obvious invariants with messages that explain why failure is impossible.
+- PREFER defensive handling for external inputs and fallible boundaries; use `expect(...)` only for obvious invariants with messages that explain why failure is impossible.
 - PREFER `thiserror` for library and domain errors.
 - PREFER `anyhow::Result` at application binary edges.
 - ALWAYS keep user-facing errors concise and actionable.

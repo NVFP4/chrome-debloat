@@ -4,7 +4,12 @@ use anyhow::Result;
 
 use crate::browser::{ApplyResult, BrowserState, UninstallResult};
 use crate::chromium::{Browser, detection, policy};
-use crate::editor::{NewPolicyType, PolicyEditorState, PolicyKeyEditorState};
+use crate::editor::{
+    NewPolicyType,
+    PolicyEditorCommitTarget,
+    PolicyEditorState,
+    PolicyKeyEditorState,
+};
 use crate::manifest::Manifest;
 use crate::policy_tree::{EditablePolicyValue, PolicyTree, PolicyTreeRowKind, RowId};
 use crate::tui::action::{Action, ActionStep, BrowserTabIndex};
@@ -16,7 +21,7 @@ pub(crate) const REPORT_ISSUE_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), 
 pub struct App {
     manifest: Manifest,
     browsers: [BrowserState; 3],
-    active_browser: Browser,
+    active_browser_index: usize,
     tui: TuiState,
     policy_tree_cache: Option<PolicyTreeCache>,
     visible_policy_cache: Option<VisiblePolicyCache>,
@@ -110,11 +115,10 @@ impl App {
         #[cfg(any(target_os = "linux", target_os = "windows"))]
         let system_policy_requires_elevation = system_policy_requires_elevation();
 
-        let active_browser = browsers[0].browser;
         let mut app = Self {
             manifest,
             browsers,
-            active_browser,
+            active_browser_index: 0,
             tui: TuiState::default(),
             policy_tree_cache: None,
             visible_policy_cache: None,
@@ -133,19 +137,18 @@ impl App {
         &self.browsers
     }
 
-    pub fn active_browser_index(&self) -> usize {
-        self.browsers
-            .iter()
-            .position(|state| state.browser == self.active_browser)
-            .unwrap_or(0)
+    pub const fn active_browser_index(&self) -> usize {
+        self.active_browser_index
     }
 
-    pub const fn active_browser(&self) -> Browser {
-        self.active_browser
+    pub fn active_browser(&self) -> Browser {
+        self.active_browser_state().browser
     }
 
     pub fn active_browser_state(&self) -> &BrowserState {
-        &self.browsers[self.active_browser_index()]
+        self.browsers
+            .get(self.active_browser_index)
+            .expect("active_browser_index is maintained within self.browsers")
     }
 
     fn refresh_policy_view(&mut self) {
@@ -154,7 +157,7 @@ impl App {
     }
 
     fn update_policy_tree(&mut self) {
-        let browser = self.active_browser;
+        let browser = self.active_browser();
         let version = self.active_browser_state().policy_tree_version();
         if self
             .policy_tree_cache
@@ -184,7 +187,7 @@ impl App {
     }
 
     fn update_visible_policy_rows(&mut self) {
-        let browser = self.active_browser;
+        let browser = self.active_browser();
         let version = self.active_browser_state().policy_tree_version();
         let query = self.tui.filter.query.clone();
 
@@ -208,7 +211,13 @@ impl App {
             let indices = tree.visible_indices(&query);
             let ids = indices
                 .iter()
-                .filter_map(|index| tree.rows().get(*index).map(|row| row.id().clone()))
+                .map(|index| {
+                    tree.rows()
+                        .get(*index)
+                        .expect("visible_indices returns indices into the same policy tree")
+                        .id()
+                        .clone()
+                })
                 .collect();
 
             (indices, ids)
@@ -224,7 +233,7 @@ impl App {
     }
 
     pub(crate) fn active_policy_tree(&self) -> Option<&PolicyTree> {
-        let browser = self.active_browser;
+        let browser = self.active_browser();
         let version = self.active_browser_state().policy_tree_version();
 
         self.policy_tree_cache
@@ -244,7 +253,7 @@ impl App {
     }
 
     fn cached_visible_policy_rows(&self) -> Option<&VisiblePolicyRows> {
-        let browser = self.active_browser;
+        let browser = self.active_browser();
         let version = self.active_browser_state().policy_tree_version();
 
         self.visible_policy_cache
@@ -258,16 +267,9 @@ impl App {
     }
 
     fn active_browser_state_mut(&mut self) -> &mut BrowserState {
-        let index = self.active_browser_index();
-        &mut self.browsers[index]
-    }
-
-    pub fn help_scroll(&self) -> u16 {
-        self.tui
-            .dialog
-            .as_ref()
-            .filter(|dialog| dialog.kind == DialogKind::Help)
-            .map_or(0, |dialog| dialog.scroll)
+        self.browsers
+            .get_mut(self.active_browser_index)
+            .expect("active_browser_index is maintained within self.browsers")
     }
 
     pub const fn policy_cursor(&self) -> Option<&RowId> {
@@ -417,12 +419,12 @@ impl App {
             return false;
         }
 
-        let previous_browser = self.active_browser;
-        self.active_browser = self.browsers[index].browser;
+        let previous_index = self.active_browser_index;
+        self.active_browser_index = index;
         let editors_changed = self.clear_policy_editors();
         let cursor_changed = self.move_policy_cursor_to_start();
 
-        self.active_browser != previous_browser || cursor_changed || editors_changed
+        self.active_browser_index != previous_index || cursor_changed || editors_changed
     }
 
     fn scroll_help(&mut self, step: ActionStep, max_scroll: u16) -> bool {
@@ -831,26 +833,24 @@ impl App {
         };
 
         let index = self.active_browser_index();
-        if let Some(target) = editor.new_list_item() {
-            let Some(cursor) = self.browsers[index].add_list_item_value_at(
-                &self.manifest,
-                &target.source_cursor,
-                value,
-            ) else {
-                self.tui.policy_editor = Some(editor);
-                return false;
-            };
-            self.tui.policy_cursor = Some(cursor);
-            return true;
-        }
-
-        let Some(cursor) = editor.existing_cursor() else {
-            self.tui.policy_editor = Some(editor);
-            return false;
-        };
-        let anchor = self.policy_cursor_anchor();
-        if self.browsers[index].set_policy_value_at(cursor, value) {
-            self.sync_policy_cursor_to_anchor(anchor);
+        match editor.commit_target() {
+            PolicyEditorCommitTarget::NewListItem(target) => {
+                let Some(cursor) = self.browsers[index].add_list_item_value_at(
+                    &self.manifest,
+                    &target.source_cursor,
+                    value,
+                ) else {
+                    self.tui.policy_editor = Some(editor);
+                    return false;
+                };
+                self.tui.policy_cursor = Some(cursor);
+            }
+            PolicyEditorCommitTarget::Existing(cursor) => {
+                let anchor = self.policy_cursor_anchor();
+                if self.browsers[index].set_policy_value_at(&cursor, value) {
+                    self.sync_policy_cursor_to_anchor(anchor);
+                }
+            }
         }
         true
     }
@@ -864,7 +864,7 @@ impl App {
             self.tui.policy_key_editor = Some(editor);
             return true;
         };
-        if self.manifest.has_policy_key(self.active_browser, &key) {
+        if self.manifest.has_policy_key(self.active_browser(), &key) {
             editor.invalid = true;
             self.tui.policy_key_editor = Some(editor);
             return true;
@@ -880,14 +880,12 @@ impl App {
 
         let cursor = self.browsers[index]
             .policy_key_cursor(&self.manifest, &key)
-            .or_else(|| self.tui.policy_cursor.clone());
-        self.tui.policy_cursor = cursor.clone();
-        self.tui.policy_editor = match (policy_type, cursor) {
-            (NewPolicyType::String, Some(cursor)) => {
-                Some(PolicyEditorState::string(cursor, String::new()))
-            }
-            (NewPolicyType::Integer, Some(cursor)) => Some(PolicyEditorState::integer(cursor)),
-            (NewPolicyType::Bool | NewPolicyType::List, _) | (_, None) => None,
+            .expect("newly added policy key is immediately present in the policy tree");
+        self.tui.policy_cursor = Some(cursor.clone());
+        self.tui.policy_editor = match policy_type {
+            NewPolicyType::String => Some(PolicyEditorState::string(cursor, String::new())),
+            NewPolicyType::Integer => Some(PolicyEditorState::integer(cursor)),
+            NewPolicyType::Bool | NewPolicyType::List => None,
         };
         true
     }
@@ -1136,7 +1134,7 @@ impl App {
     }
 
     fn default_export_path(&self) -> PathBuf {
-        let file_name = policy::export_file_name(self.active_browser);
+        let file_name = policy::export_file_name(self.active_browser());
 
         home_dir()
             .map(|directory| directory.join(&file_name))
@@ -1269,7 +1267,7 @@ impl App {
         match self.active_browser_state_mut().uninstall_policy() {
             #[cfg(not(target_os = "macos"))]
             Ok(UninstallResult::Uninstalled) => {
-                let preset = self.manifest.balanced_preset(self.active_browser);
+                let preset = self.manifest.balanced_preset(self.active_browser());
                 self.active_browser_state_mut()
                     .use_missing_policy_defaults(&self.manifest, preset);
                 self.move_policy_cursor_to_start();

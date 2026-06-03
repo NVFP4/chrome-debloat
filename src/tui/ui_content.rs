@@ -224,13 +224,9 @@ fn scrollbar_thumb(
 
     let track_height = usize::from(track_height);
     let thumb_height = proportional_thumb_height(track_height, row_count, viewport_height);
-    let max_scroll = row_count.saturating_sub(viewport_height);
+    let max_scroll = row_count - viewport_height;
     let max_thumb_start = track_height.saturating_sub(thumb_height);
-    let thumb_start = scroll
-        .min(max_scroll)
-        .saturating_mul(max_thumb_start)
-        .checked_div(max_scroll)
-        .unwrap_or_default();
+    let thumb_start = scroll.min(max_scroll).saturating_mul(max_thumb_start) / max_scroll;
 
     Some(ScrollbarThumb {
         start: thumb_start as u16,
@@ -333,28 +329,22 @@ fn policy_display_rows(
     } else {
         END_SPACING
     };
-    let custom_prefix_len = usize::from(
-        key_editor.is_some()
-            && !visible_indices
-                .first()
-                .and_then(|index| rows.get(*index))
-                .is_some_and(is_custom_group),
-    ) * (1 + usize::from(!rows.is_empty()));
+    let first_visible_row = visible_indices
+        .first()
+        .map(|index| visible_row(rows, *index));
+    let custom_prefix_len =
+        usize::from(key_editor.is_some() && !first_visible_row.is_some_and(is_custom_group))
+            * (1 + usize::from(!rows.is_empty()));
     let mut display_rows =
         Vec::with_capacity(custom_prefix_len + visible_indices.len() + end_spacing);
-    let has_custom_group = visible_indices
-        .first()
-        .and_then(|index| rows.get(*index))
-        .is_some_and(is_custom_group);
+    let has_custom_group = first_visible_row.is_some_and(is_custom_group);
 
     if !has_custom_group {
         push_custom_editor_rows(&mut display_rows, key_editor, !rows.is_empty());
     }
 
     for (position, index) in visible_indices.iter().enumerate() {
-        let Some(row) = rows.get(*index) else {
-            continue;
-        };
+        let row = visible_row(rows, *index);
         if position > 0 && matches!(row.kind, PolicyTreeRowKind::Group { .. }) {
             push_spacers(&mut display_rows, GROUP_SPACING);
         }
@@ -376,6 +366,11 @@ fn policy_display_rows(
 
     push_spacers(&mut display_rows, end_spacing);
     display_rows
+}
+
+fn visible_row(rows: &[PolicyTreeRow], index: usize) -> &PolicyTreeRow {
+    rows.get(index)
+        .expect("visible policy indices reference rows in the same policy tree")
 }
 
 fn push_custom_editor_rows(

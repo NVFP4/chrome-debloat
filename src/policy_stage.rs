@@ -10,7 +10,7 @@ use crate::manifest::{Manifest, PolicySetting};
 pub struct BaseIndex(pub usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AppendId(pub u64);
+pub struct AppendId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StageStatus {
@@ -67,7 +67,7 @@ pub struct GroupStage<Item> {
 #[derive(Debug, Clone)]
 pub struct AppendLog<Item> {
     entries: Vec<Option<AppendState<Item>>>,
-    next_id: u64,
+    next_id: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -123,11 +123,11 @@ impl BaseIndex {
 
 impl AppendId {
     #[allow(dead_code)]
-    pub const fn new(id: u64) -> Self {
+    pub const fn new(id: usize) -> Self {
         Self(id)
     }
 
-    pub const fn get(self) -> u64 {
+    pub const fn get(self) -> usize {
         self.0
     }
 }
@@ -182,9 +182,10 @@ where
         let Some(previous) = stage.base_state(index) else {
             return false;
         };
-        let Some(base) = stage.base.get(index.get()) else {
-            return false;
-        };
+        let base = stage
+            .base
+            .get(index.get())
+            .expect("base_state returned Some only after validating the base index");
         let next = if base == &value {
             BaseState::Applied
         } else {
@@ -235,7 +236,7 @@ where
 
     pub fn append(&mut self, group: &GroupId, value: Item) -> Option<AppendId> {
         let stage = self.groups.get_mut(group)?;
-        let id = stage.appends.reserve_id()?;
+        let id = stage.appends.reserve_id();
         let patch = StagePatch {
             group: group.clone(),
             target: StageTarget::Append(id),
@@ -304,9 +305,7 @@ where
         }
 
         let change = &self.history[self.cursor - 1];
-        if !apply_change_previous(&mut self.groups, change) {
-            return false;
-        }
+        apply_change_previous(&mut self.groups, change);
         self.cursor -= 1;
 
         true
@@ -318,9 +317,7 @@ where
         }
 
         let change = &self.history[self.cursor];
-        if !apply_change_next(&mut self.groups, change) {
-            return false;
-        }
+        apply_change_next(&mut self.groups, change);
         self.cursor += 1;
 
         true
@@ -385,18 +382,18 @@ where
 
         match patches.len() {
             0 => false,
-            1 => match patches.pop() {
-                Some(patch) => self.push_change(StageChange::Patch(patch)),
-                None => false,
-            },
+            1 => {
+                let patch = patches
+                    .pop()
+                    .expect("one retained patch exists when len is 1");
+                self.push_change(StageChange::Patch(patch))
+            }
             _ => self.push_change(StageChange::Batch(patches.into_boxed_slice())),
         }
     }
 
     fn push_change(&mut self, change: StageChange<GroupId, Item>) -> bool {
-        if !apply_change_next(&mut self.groups, &change) {
-            return false;
-        }
+        apply_change_next(&mut self.groups, &change);
 
         self.history.truncate(self.cursor);
         self.history.push(change);
@@ -425,7 +422,10 @@ where
     ) -> Option<StagePatch<GroupId, Item>> {
         let stage = self.groups.get(&group)?;
         let previous = stage.base_state(index)?;
-        let base = stage.base.get(index.get())?;
+        let base = stage
+            .base
+            .get(index.get())
+            .expect("base_state returned Some only after validating the base index");
         let next = if base == &value {
             BaseState::Applied
         } else {
@@ -482,54 +482,57 @@ where
 fn apply_change_previous<GroupId, Item>(
     groups: &mut BTreeMap<GroupId, GroupStage<Item>>,
     change: &StageChange<GroupId, Item>,
-) -> bool
-where
+) where
     GroupId: Ord,
     Item: Clone + PartialEq,
 {
     match change {
         StageChange::Patch(patch) => apply_patch_previous(groups, patch),
-        StageChange::Batch(patches) => patches
-            .iter()
-            .rev()
-            .all(|patch| apply_patch_previous(groups, patch)),
+        StageChange::Batch(patches) => {
+            for patch in patches.iter().rev() {
+                apply_patch_previous(groups, patch);
+            }
+        }
     }
 }
 
 fn apply_change_next<GroupId, Item>(
     groups: &mut BTreeMap<GroupId, GroupStage<Item>>,
     change: &StageChange<GroupId, Item>,
-) -> bool
-where
+) where
     GroupId: Ord,
     Item: Clone + PartialEq,
 {
     match change {
         StageChange::Patch(patch) => apply_patch_next(groups, patch),
-        StageChange::Batch(patches) => patches.iter().all(|patch| apply_patch_next(groups, patch)),
+        StageChange::Batch(patches) => {
+            for patch in patches {
+                apply_patch_next(groups, patch);
+            }
+        }
     }
 }
 
 fn apply_patch_previous<GroupId, Item>(
     groups: &mut BTreeMap<GroupId, GroupStage<Item>>,
     patch: &StagePatch<GroupId, Item>,
-) -> bool
-where
+) where
     GroupId: Ord,
     Item: Clone + PartialEq,
 {
     apply_patch_state(groups, &patch.group, patch.target, &patch.previous)
+        .expect("stored patch previous state must match an existing staged row")
 }
 
 fn apply_patch_next<GroupId, Item>(
     groups: &mut BTreeMap<GroupId, GroupStage<Item>>,
     patch: &StagePatch<GroupId, Item>,
-) -> bool
-where
+) where
     GroupId: Ord,
     Item: Clone + PartialEq,
 {
     apply_patch_state(groups, &patch.group, patch.target, &patch.next)
+        .expect("stored patch next state must match an existing staged row")
 }
 
 fn apply_patch_state<GroupId, Item>(
@@ -537,14 +540,12 @@ fn apply_patch_state<GroupId, Item>(
     group: &GroupId,
     target: StageTarget,
     state: &PatchState<Item>,
-) -> bool
+) -> Option<()>
 where
     GroupId: Ord,
     Item: Clone + PartialEq,
 {
-    let Some(stage) = groups.get_mut(group) else {
-        return false;
-    };
+    let stage = groups.get_mut(group)?;
 
     match (target, state) {
         (StageTarget::Base(index), PatchState::Base(state)) => stage.apply_base_state(index, state),
@@ -552,7 +553,7 @@ where
             stage.appends.apply_slot_state(id, state)
         }
         (StageTarget::Base(_), PatchState::Append(_))
-        | (StageTarget::Append(_), PatchState::Base(_)) => false,
+        | (StageTarget::Append(_), PatchState::Base(_)) => None,
     }
 }
 
@@ -650,10 +651,8 @@ where
         })
     }
 
-    fn apply_base_state(&mut self, index: BaseIndex, state: &BaseState<Item>) -> bool {
-        let Some(base) = self.base.get(index.get()) else {
-            return false;
-        };
+    fn apply_base_state(&mut self, index: BaseIndex, state: &BaseState<Item>) -> Option<()> {
+        let base = self.base.get(index.get())?;
 
         match state {
             BaseState::Applied => {
@@ -671,7 +670,7 @@ where
             }
         }
 
-        true
+        Some(())
     }
 }
 
@@ -725,12 +724,15 @@ where
         }
     }
 
-    fn reserve_id(&mut self) -> Option<AppendId> {
-        let next_id = self.next_id.checked_add(1)?;
+    fn reserve_id(&mut self) -> AppendId {
+        let next_id = self
+            .next_id
+            .checked_add(1)
+            .expect("append ID cannot overflow before Vec capacity is exhausted");
         let id = AppendId(self.next_id);
         self.next_id = next_id;
 
-        Some(id)
+        id
     }
 
     fn slot_state(&self, id: AppendId) -> Option<AppendSlotState<Item>> {
@@ -742,49 +744,43 @@ where
         })
     }
 
-    fn apply_slot_state(&mut self, id: AppendId, state: &AppendSlotState<Item>) -> bool {
+    fn apply_slot_state(&mut self, id: AppendId, state: &AppendSlotState<Item>) -> Option<()> {
         match state {
             AppendSlotState::Absent => self.remove(id),
             AppendSlotState::Present(value) => {
                 self.set_state(id, AppendState::Present(value.clone()));
-                true
+                Some(())
             }
             AppendSlotState::Deleted(value) => {
                 self.set_state(id, AppendState::Deleted(value.clone()));
-                true
+                Some(())
             }
         }
     }
 
     fn entry(&self, id: AppendId) -> Option<&AppendState<Item>> {
-        self.entries.get(append_position(id)?)?.as_ref()
+        self.entries.get(id.get())?.as_ref()
     }
 
     fn set_state(&mut self, id: AppendId, state: AppendState<Item>) {
-        let Some(position) = append_position(id) else {
-            return;
-        };
+        let position = id.get();
+        let required_len = position
+            .checked_add(1)
+            .expect("append ID position must fit the requested slot length");
         if self.entries.len() <= position {
-            self.entries.resize_with(position + 1, || None);
+            self.entries.resize_with(required_len, || None);
         }
         self.entries[position] = Some(state);
 
-        if let Some(next_id) = id.get().checked_add(1) {
-            self.next_id = self.next_id.max(next_id);
-        }
+        self.next_id = self.next_id.max(required_len);
     }
 
-    fn remove(&mut self, id: AppendId) -> bool {
-        let Some(position) = append_position(id) else {
-            return false;
-        };
-        let Some(entry) = self.entries.get_mut(position) else {
-            return false;
-        };
-        let removed = entry.take().is_some();
+    fn remove(&mut self, id: AppendId) -> Option<()> {
+        let entry = self.entries.get_mut(id.get())?;
+        entry.take()?;
         self.trim_absent_tail();
 
-        removed
+        Some(())
     }
 
     fn clear(&mut self) {
@@ -797,10 +793,6 @@ where
             self.entries.pop();
         }
     }
-}
-
-fn append_position(id: AppendId) -> Option<usize> {
-    usize::try_from(id.get()).ok()
 }
 
 impl<Item> Default for AppendLog<Item>
@@ -861,7 +853,7 @@ impl<'a, Item> Iterator for Rows<'a, Item> {
             self.next_append += 1;
 
             if let Some(AppendState::Present(value)) = entry {
-                let id = AppendId(u64::try_from(position).ok()?);
+                let id = AppendId(position);
                 return Some(StageRow {
                     target: StageTarget::Append(id),
                     base: None,

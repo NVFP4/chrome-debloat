@@ -38,10 +38,7 @@ const CLOSE: ButtonSpec = ("esc", "Close");
 
 const DIALOG_TITLE: &str = "Uninstall Policies";
 
-pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let Some(dialog) = app.dialog() else {
-        return;
-    };
+pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App, dialog: &DialogState) {
     let has_policy = app.active_browser_state().managed_policy_exists();
 
     ui_dialog::render(

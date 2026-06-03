@@ -7,7 +7,7 @@ use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
 use super::styles;
 use super::ui_dialog::{self, DialogLayout, DialogRender};
 use super::ui_text::{blank, join_lines};
-use crate::app::App;
+use crate::app::{App, DialogState};
 
 pub const HELP_LINE_COUNT: u16 = 30;
 const LAYOUT: DialogLayout = DialogLayout {
@@ -30,20 +30,20 @@ const SCROLLBAR: Style = styles::DARK_GRAY;
 const SCROLLBAR_THUMB: Style = styles::GRAY;
 const END_SPACING: usize = 2;
 
-pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
+pub fn render(frame: &mut Frame<'_>, area: Rect, _app: &App, dialog: &DialogState) {
     ui_dialog::render(
         frame,
         area,
         DialogRender {
             layout: LAYOUT,
-            scroll: (app.help_scroll(), 0),
+            scroll: (dialog.scroll, 0),
             wrap: false,
             content: help_text(),
             buttons: None,
         },
     );
 
-    render_scrollbar(frame, area, app.help_scroll());
+    render_scrollbar(frame, area, dialog.scroll);
 }
 
 pub(super) fn max_scroll(area: Rect) -> u16 {
