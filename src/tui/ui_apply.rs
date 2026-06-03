@@ -77,18 +77,15 @@ fn apply_lines(app: &App, diff: DiffCounts) -> [Line<'static>; 6] {
         ui_dialog::title_line("Confirm Apply"),
         Line::default(),
         Line::styled(
-            format!("Apply pending policy changes for {}?", browser),
+            format!("Apply staged changes for {}?", browser),
             ui_dialog::BODY,
         ),
         diff_summary_line(diff),
         Line::default(),
         Line::from_iter([
-            Span::styled("Choosing ", ui_dialog::BODY),
-            Span::styled("Apply", IMPORTANT),
-            Span::styled(
-                " will write changes directly to the system policy path.",
-                ui_dialog::BODY,
-            ),
+            Span::styled("This will ", ui_dialog::BODY),
+            Span::styled("overwrite and apply changes directly", IMPORTANT),
+            Span::styled(" to the system.", ui_dialog::BODY),
         ]),
     ]
 }
@@ -100,14 +97,14 @@ fn apply_lines(app: &App, diff: DiffCounts) -> [Line<'static>; 9] {
         ui_dialog::title_line("Confirm Apply"),
         Line::default(),
         Line::styled(
-            format!("Apply pending policy changes for {}?", browser),
+            format!("Apply staged changes for {}?", browser),
             ui_dialog::BODY,
         ),
         diff_summary_line(diff),
         Line::default(),
         Line::from_iter([
             Span::styled(
-                "macOS requires new profiles to be installed and ",
+                "macOS requires device profiles to be installed and ",
                 ui_dialog::BODY,
             ),
             Span::styled("approved manually", IMPORTANT),

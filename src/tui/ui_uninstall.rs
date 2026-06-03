@@ -128,7 +128,7 @@ fn confirm_uninstall_text(app: &App, _focused_button: usize) -> [Line<'static>; 
         ui_dialog::title_line(DIALOG_TITLE),
         Line::default(),
         Line::from_iter([
-            Span::styled("macOS requires policy profiles to be ", ui_dialog::BODY),
+            Span::styled("macOS requires device profiles to be ", ui_dialog::BODY),
             Span::styled("removed manually", IMPORTANT),
             Span::styled(".", ui_dialog::BODY),
         ]),
