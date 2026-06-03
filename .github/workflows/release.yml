@@ -23,8 +23,22 @@ env:
 
 jobs:
   check:
-    name: Check release readiness
-    runs-on: ubuntu-latest
+    name: Checks (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: ubuntu-latest
+          label: Linux x64
+        - os: ubuntu-24.04-arm
+          label: Linux arm64
+        - os: macos-15-intel
+          label: macOS x64
+        - os: macos-latest
+          label: macOS arm64
+        - os: windows-latest
+          label: Windows x64
     steps:
     - name: Checkout main
       uses: actions/checkout@v4
@@ -54,7 +68,7 @@ jobs:
       run: cargo +1.96.0 test --workspace --all-features
 
   prepare:
-    name: Prepare release
+    name: Bump Version and Tag
     needs: check
     runs-on: ubuntu-latest
     permissions:
@@ -188,7 +202,7 @@ jobs:
         git push --atomic origin HEAD:main "refs/tags/$TAG"
 
   build:
-    name: Build ${{ matrix.asset }}
+    name: Build (${{ matrix.label }})
     needs: prepare
     runs-on: ${{ matrix.os }}
     permissions:
@@ -198,22 +212,27 @@ jobs:
       matrix:
         include:
         - os: ubuntu-latest
+          label: Linux x64
           target: x86_64-unknown-linux-gnu
           asset: chrome-debloat-linux-x86_64.tar.gz
           archive: tar
         - os: ubuntu-24.04-arm
+          label: Linux arm64
           target: aarch64-unknown-linux-gnu
           asset: chrome-debloat-linux-aarch64.tar.gz
           archive: tar
         - os: macos-15-intel
+          label: macOS x64
           target: x86_64-apple-darwin
           asset: chrome-debloat-macos-x86_64.tar.gz
           archive: tar
         - os: macos-latest
+          label: macOS arm64
           target: aarch64-apple-darwin
           asset: chrome-debloat-macos-aarch64.tar.gz
           archive: tar
         - os: windows-latest
+          label: Windows x64
           target: x86_64-pc-windows-msvc
           asset: chrome-debloat-windows-x86_64.zip
           archive: zip
@@ -268,7 +287,7 @@ jobs:
         if-no-files-found: error
 
   upload:
-    name: Upload release assets
+    name: Publish Assets
     needs:
     - prepare
     - build
@@ -291,7 +310,7 @@ jobs:
         generate_release_notes: true
 
   next-version:
-    name: Bump next alpha version
+    name: Next Dev Version
     needs:
     - prepare
     - upload
