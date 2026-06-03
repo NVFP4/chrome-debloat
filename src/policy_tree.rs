@@ -140,6 +140,7 @@ type RowPath = Arc<[PathSegment]>;
 struct BuildContext<'a> {
     manifest: &'a Manifest,
     browser: Browser,
+    defaults: Option<&'a PolicySet>,
 }
 
 struct ChildRows<'a> {
@@ -192,8 +193,17 @@ struct ObjectChildSpec<'a> {
 }
 
 impl PolicyTree {
-    pub(crate) fn build(manifest: &Manifest, browser: Browser, stage: &PolicyStage) -> Self {
-        let context = BuildContext { manifest, browser };
+    pub(crate) fn build(
+        manifest: &Manifest,
+        browser: Browser,
+        stage: &PolicyStage,
+        defaults: Option<&PolicySet>,
+    ) -> Self {
+        let context = BuildContext {
+            manifest,
+            browser,
+            defaults,
+        };
         let mut rows = Vec::new();
 
         push_custom_rows(&mut rows, context, stage);
@@ -516,7 +526,10 @@ fn push_policy_row(
         .base
         .filter(|base| base.is_applied())
         .map(PolicyItem::value);
-    let default = (!row.current.is_applied()).then_some(row.current.value());
+    let default = context
+        .defaults
+        .and_then(|defaults| defaults.get(row.current.key()))
+        .or_else(|| (!row.current.is_applied()).then_some(row.current.value()));
     let value = current.or(baseline).or(default);
     let Some(value) = value else {
         return;
@@ -1455,6 +1468,56 @@ mod tests {
                 "value:1234",
             ],
         );
+    }
+
+    #[test]
+    fn recommended_default_list_item_remains_visible_after_current_removal() -> anyhow::Result<()> {
+        let manifest = Manifest::load()?;
+        let browser = Browser::Chrome;
+        let defaults = manifest.balanced_preset(browser);
+        let Some(PolicyValue::List(default_extensions)) = defaults.get(EXTENSION_INSTALL_FORCELIST)
+        else {
+            return Err(anyhow::anyhow!("balanced preset should include extensions"));
+        };
+        let Some(removed_extension) = default_extensions.first().cloned() else {
+            return Err(anyhow::anyhow!("balanced preset should include extensions"));
+        };
+
+        let mut current = defaults.clone();
+        let Some(PolicyValue::List(current_extensions)) =
+            current.get_mut(EXTENSION_INSTALL_FORCELIST)
+        else {
+            return Err(anyhow::anyhow!("balanced preset should include extensions"));
+        };
+        current_extensions.remove(0);
+
+        let baseline = PolicySet::new();
+        let stage = PolicyStage::with_current(&manifest, browser, &baseline, &current);
+        let tree = PolicyTree::build(&manifest, browser, &stage, Some(&defaults));
+        let removed_label = PolicyValueSummary::new(&removed_extension)
+            .child_label()
+            .to_owned();
+
+        assert!(
+            tree.rows.iter().any(|row| matches!(
+                (&row.kind, row.target()),
+                (
+                    PolicyTreeRowKind::Value {
+                        value,
+                        status: RowStatus::NotApplied,
+                        ..
+                    },
+                    RowTarget::ListItem {
+                        current_index: None,
+                        restore: Some(_),
+                        ..
+                    },
+                ) if value.child_label() == removed_label
+            )),
+            "removed recommended extension should remain visible as a restorable row",
+        );
+
+        Ok(())
     }
 
     fn group(title: &str) -> PolicyTreeRow {

@@ -147,7 +147,12 @@ impl BrowserState {
     pub fn policy_tree(&self, manifest: &Manifest) -> Option<PolicyTree> {
         self.policy.as_ref()?;
 
-        Some(PolicyTree::build(manifest, self.browser, &self.edits))
+        Some(PolicyTree::build(
+            manifest,
+            self.browser,
+            &self.edits,
+            self.first_missing_current.as_ref(),
+        ))
     }
 
     pub fn undo(&mut self) -> bool {
