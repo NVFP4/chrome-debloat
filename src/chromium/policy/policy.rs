@@ -40,17 +40,6 @@ pub enum PolicyValue {
 }
 
 impl PolicyValue {
-    pub fn display_value(&self) -> String {
-        match self {
-            Self::Bool(value) => value.to_string(),
-            Self::Integer(value) => value.to_string(),
-            Self::String(value) => value.clone(),
-            Self::List(values) => format!("{} items", values.len()),
-            Self::Object(values) => format!("{} keys", values.len()),
-            Self::Null => "null".to_owned(),
-        }
-    }
-
     pub(crate) const fn list_len(&self) -> Option<usize> {
         match self {
             Self::List(values) => Some(values.len()),
@@ -129,26 +118,6 @@ mod tests {
         };
 
         assert_eq!(policy.extension_count(), 0);
-    }
-
-    #[test]
-    fn display_value_summarizes_policy_values() {
-        let mut object = PolicySet::new();
-        object.insert("name".to_owned(), string("value"));
-        object.insert("other".to_owned(), PolicyValue::Integer(1));
-
-        assert_eq!(PolicyValue::Bool(true).display_value(), "true");
-        assert_eq!(PolicyValue::Integer(4).display_value(), "4");
-        assert_eq!(
-            string("https://example.com").display_value(),
-            "https://example.com"
-        );
-        assert_eq!(
-            PolicyValue::List(vec![string("one"), string("two")]).display_value(),
-            "2 items"
-        );
-        assert_eq!(PolicyValue::Object(object).display_value(), "2 keys");
-        assert_eq!(PolicyValue::Null.display_value(), "null");
     }
 
     #[test]

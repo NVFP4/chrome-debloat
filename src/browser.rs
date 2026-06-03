@@ -3,17 +3,10 @@ use std::path::Path;
 use crate::chromium::Browser;
 use crate::chromium::detection::{BrowserDetectionResult, BrowserInstall};
 use crate::chromium::policy::{self, BrowserPolicy, PolicyReadResult, PolicySet, PolicyValue};
-use crate::diff::{self, DiffCounts};
-use crate::history::EditHistory;
+use crate::diff::DiffCounts;
 use crate::manifest::Manifest;
-use crate::policy_tree::{
-    self,
-    EditablePolicyValue,
-    NewListItemTarget,
-    PolicyTree,
-    PolicyValueUpdate,
-    RowId,
-};
+use crate::policy_stage::PolicyStage;
+use crate::policy_tree::{self, EditablePolicyValue, NewListItemTarget, PolicyTree, RowId};
 #[cfg(target_os = "macos")]
 use crate::watcher::ManagedPolicyWatcher;
 
@@ -30,7 +23,8 @@ pub struct BrowserState {
     policy_tree_version: u64,
     #[cfg(target_os = "macos")]
     managed_policy_watcher: Option<ManagedPolicyWatcher>,
-    edits: EditHistory,
+    edits: PolicyStage,
+    first_missing_current: Option<PolicySet>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,6 +48,7 @@ impl BrowserState {
         browser: Browser,
         install: BrowserDetectionResult,
         policy: PolicyReadResult,
+        manifest: &Manifest,
         preset: PolicySet,
     ) -> Self {
         let (install, install_error) = match install {
@@ -65,14 +60,22 @@ impl BrowserState {
             Err(error) => (None, Some(error.to_string())),
         };
         let managed_policy_exists = policy.is_some();
-        let (policy, edits) = match (policy, policy_error.is_none() && !preset.is_empty()) {
-            (Some(policy), _) => (Some(policy), EditHistory::default()),
-            (None, true) => {
-                let (policy, edits) = missing_policy_with_defaults(browser, preset);
-                (Some(policy), edits)
-            }
-            (None, false) => (None, EditHistory::default()),
-        };
+        let (policy, edits, first_missing_current) =
+            match (policy, policy_error.is_none() && !preset.is_empty()) {
+                (Some(policy), _) => {
+                    let edits = PolicyStage::new(manifest, browser, &policy.policies);
+                    (Some(policy), edits, None)
+                }
+                (None, true) => {
+                    let (policy, edits) = missing_policy_with_defaults(manifest, browser, &preset);
+                    (Some(policy), edits, Some(preset))
+                }
+                (None, false) => (
+                    None,
+                    PolicyStage::new(manifest, browser, &PolicySet::new()),
+                    None,
+                ),
+            };
 
         Self {
             browser,
@@ -87,6 +90,7 @@ impl BrowserState {
             #[cfg(target_os = "macos")]
             managed_policy_watcher: None,
             edits,
+            first_missing_current,
         }
     }
 
@@ -103,7 +107,11 @@ impl BrowserState {
             return self.is_dirty();
         }
 
-        self.edits.current_differs_from_first()
+        self.is_dirty()
+            && self
+                .first_missing_current
+                .as_ref()
+                .is_some_and(|first| self.edits.materialize() != *first)
     }
 
     pub fn awaiting_install(&self) -> bool {
@@ -119,8 +127,9 @@ impl BrowserState {
     }
 
     pub fn has_policy(&self) -> bool {
-        self.policy_sets()
-            .is_some_and(|(baseline, current)| !baseline.is_empty() || !current.is_empty())
+        self.policy.as_ref().is_some_and(|policy| {
+            !policy.policies.is_empty() || !self.edits.materialize().is_empty()
+        })
     }
 
     pub const fn managed_policy_exists(&self) -> bool {
@@ -131,34 +140,21 @@ impl BrowserState {
         self.policy_tree_version
     }
 
-    pub fn policy_sets(&self) -> Option<(&PolicySet, &PolicySet)> {
-        let policy = self.policy.as_ref()?;
-
-        Some((&policy.policies, self.edits.current(&policy.policies)))
-    }
-
     pub fn diff_counts(&self) -> DiffCounts {
-        let Some((baseline, current)) = self.policy_sets() else {
-            return DiffCounts::default();
-        };
-
-        diff::counts(baseline, current)
+        self.edits.diff_counts()
     }
 
-    pub fn policy_tree(
-        &self,
-        manifest: &Manifest,
-        baseline: &PolicySet,
-        current: &PolicySet,
-    ) -> PolicyTree {
-        PolicyTree::build(manifest, self.browser, baseline, current)
+    pub fn policy_tree(&self, manifest: &Manifest) -> Option<PolicyTree> {
+        self.policy.as_ref()?;
+
+        Some(PolicyTree::build(manifest, self.browser, &self.edits))
     }
 
     pub fn undo(&mut self) -> bool {
-        let Some(policy) = &self.policy else {
+        if self.policy.is_none() {
             return false;
-        };
-        let changed = self.edits.undo(&policy.policies);
+        }
+        let changed = self.edits.undo();
         if changed {
             self.bump_policy_tree_version();
             self.clear_awaiting_policy_change();
@@ -168,10 +164,10 @@ impl BrowserState {
     }
 
     pub fn redo(&mut self) -> bool {
-        let Some(policy) = &self.policy else {
+        if self.policy.is_none() {
             return false;
-        };
-        let changed = self.edits.redo(&policy.policies);
+        }
+        let changed = self.edits.redo();
         if changed {
             self.bump_policy_tree_version();
             self.clear_awaiting_policy_change();
@@ -190,17 +186,16 @@ impl BrowserState {
         changed
     }
 
-    pub fn apply_policy_changes(&mut self) -> Result<ApplyResult, String> {
+    pub fn apply_policy_changes(&mut self, manifest: &Manifest) -> Result<ApplyResult, String> {
         let Some(policy) = &self.policy else {
             return Ok(ApplyResult::NoChanges);
         };
 
-        let current = self.edits.current(&policy.policies);
-        if current == &policy.policies {
+        let current = self.edits.materialize();
+        if current == policy.policies {
             return Ok(ApplyResult::NoChanges);
         }
 
-        let current = current.clone();
         let write = policy::write(self.browser, &current).map_err(|error| error.to_string())?;
         if should_wait_for_managed_policy_install() {
             self.watch_managed_policy()?;
@@ -220,9 +215,10 @@ impl BrowserState {
         if let Some(policy) = &mut self.policy {
             policy.source = write.target;
             policy.policies = current;
+            self.edits = PolicyStage::new(manifest, self.browser, &policy.policies);
         }
         self.managed_policy_exists = true;
-        self.edits.revert();
+        self.first_missing_current = None;
         self.bump_policy_tree_version();
         self.clear_awaiting_policy_change();
         self.policy_error = None;
@@ -231,15 +227,19 @@ impl BrowserState {
     }
 
     pub fn export_policy_file(&self, path: &Path) -> Result<policy::PolicyWrite, String> {
-        let Some(policy) = &self.policy else {
+        if self.policy.is_none() {
             return Err("no policy is available to save".to_owned());
-        };
+        }
 
-        let current = self.edits.current(&policy.policies);
-        policy::export(self.browser, current, path).map_err(|error| error.to_string())
+        let current = self.edits.materialize();
+        policy::export(self.browser, &current, path).map_err(|error| error.to_string())
     }
 
-    pub fn refresh_awaiting_policy_change(&mut self, preset: PolicySet) -> bool {
+    pub fn refresh_awaiting_policy_change(
+        &mut self,
+        manifest: &Manifest,
+        preset: PolicySet,
+    ) -> bool {
         if !self.awaiting_policy_change() {
             return false;
         }
@@ -248,25 +248,27 @@ impl BrowserState {
         }
 
         if self.awaiting_uninstall {
-            return self.refresh_awaiting_uninstall(preset);
+            return self.refresh_awaiting_uninstall(manifest, preset);
         }
 
-        self.refresh_awaiting_install()
+        self.refresh_awaiting_install(manifest)
     }
 
-    fn refresh_awaiting_install(&mut self) -> bool {
-        let Some(policy) = &self.policy else {
+    fn refresh_awaiting_install(&mut self, manifest: &Manifest) -> bool {
+        if self.policy.is_none() {
             self.clear_awaiting_policy_change();
             return true;
-        };
-        let expected = self.edits.current(&policy.policies).clone();
+        }
+        let expected = self.edits.materialize();
 
         match policy::read(self.browser) {
             Ok(Some(updated)) if updated.policies == expected => {
+                let edits = PolicyStage::new(manifest, self.browser, &updated.policies);
                 self.policy = Some(updated);
                 self.policy_error = None;
                 self.managed_policy_exists = true;
-                self.edits.revert();
+                self.edits = edits;
+                self.first_missing_current = None;
                 self.bump_policy_tree_version();
                 self.clear_awaiting_policy_change();
                 true
@@ -276,9 +278,12 @@ impl BrowserState {
                     policy.source != updated.source || policy.policies != updated.policies
                 }) || self.policy_error.is_some();
                 if changed {
+                    let edits = PolicyStage::new(manifest, self.browser, &updated.policies);
                     self.policy = Some(updated);
                     self.policy_error = None;
                     self.managed_policy_exists = true;
+                    self.edits = edits;
+                    self.first_missing_current = None;
                     self.bump_policy_tree_version();
                 }
 
@@ -289,10 +294,10 @@ impl BrowserState {
         }
     }
 
-    fn refresh_awaiting_uninstall(&mut self, preset: PolicySet) -> bool {
+    fn refresh_awaiting_uninstall(&mut self, manifest: &Manifest, preset: PolicySet) -> bool {
         match policy::read(self.browser) {
             Ok(None) => {
-                self.use_missing_policy_defaults(preset);
+                self.use_missing_policy_defaults(manifest, preset);
                 true
             }
             Ok(Some(updated)) => {
@@ -300,9 +305,12 @@ impl BrowserState {
                     policy.source != updated.source || policy.policies != updated.policies
                 }) || self.policy_error.is_some();
                 if changed {
+                    let edits = PolicyStage::new(manifest, self.browser, &updated.policies);
                     self.policy = Some(updated);
                     self.policy_error = None;
                     self.managed_policy_exists = true;
+                    self.edits = edits;
+                    self.first_missing_current = None;
                     self.bump_policy_tree_version();
                 }
 
@@ -345,48 +353,49 @@ impl BrowserState {
         Ok(UninstallResult::AwaitingUninstall)
     }
 
-    pub fn use_missing_policy_defaults(&mut self, preset: PolicySet) {
-        let (policy, edits) = missing_policy_with_defaults(self.browser, preset);
+    pub fn use_missing_policy_defaults(&mut self, manifest: &Manifest, preset: PolicySet) {
+        let (policy, edits) = missing_policy_with_defaults(manifest, self.browser, &preset);
         self.policy = Some(policy);
         self.policy_error = None;
         self.managed_policy_exists = false;
         self.edits = edits;
+        self.first_missing_current = Some(preset);
         self.bump_policy_tree_version();
         self.clear_awaiting_policy_change();
     }
 
     pub fn stage_policy_removal_at(&mut self, cursor: &RowId) -> bool {
-        self.edit_current(|_, _, current| policy_tree::remove_at(current, cursor))
+        self.edit_stage(|stage| policy_tree::remove_at(stage, cursor))
     }
 
     pub fn stage_policy_group_removal_at(&mut self, manifest: &Manifest, cursor: &RowId) -> bool {
-        self.edit_current(|browser, _, current| {
-            policy_tree::remove_group_at(manifest, browser, current, cursor)
+        let tree = self.policy_tree(manifest);
+        self.edit_stage(|stage| {
+            let Some(tree) = &tree else {
+                return false;
+            };
+
+            policy_tree::remove_group_at(stage, tree, cursor)
         })
     }
 
     pub fn toggle_policy_group_at(&mut self, manifest: &Manifest, cursor: &RowId) -> bool {
-        self.edit_current(|browser, baseline, current| {
-            policy_tree::toggle_group_at(manifest, browser, baseline, current, cursor)
+        let tree = self.policy_tree(manifest);
+        self.edit_stage(|stage| {
+            let Some(tree) = &tree else {
+                return false;
+            };
+
+            policy_tree::toggle_group_at(stage, tree, cursor)
         })
     }
 
-    pub fn toggle_policy_at(&mut self, manifest: &Manifest, cursor: &RowId) -> bool {
-        self.edit_current(|browser, baseline, current| {
-            policy_tree::toggle_policy_at(manifest, browser, baseline, current, cursor)
-        })
+    pub fn toggle_policy_at(&mut self, cursor: &RowId) -> bool {
+        self.edit_stage(|stage| policy_tree::toggle_policy_at(stage, cursor))
     }
 
     pub fn add_policy_key(&mut self, key: String, value: PolicyValue) -> bool {
-        self.edit_current(|_, baseline, current| {
-            if baseline.contains_key(&key) || current.contains_key(&key) {
-                return None;
-            }
-
-            let mut updated = current.clone();
-            updated.insert(key, value);
-            Some(updated)
-        })
+        self.edit_stage(|stage| stage.add_custom_key(key, value))
     }
 
     pub fn new_list_item_target_at(
@@ -394,11 +403,9 @@ impl BrowserState {
         manifest: &Manifest,
         cursor: &RowId,
     ) -> Option<NewListItemTarget> {
-        let policy = self.policy.as_ref()?;
-        let baseline = &policy.policies;
-        let current = self.edits.current(baseline);
+        let tree = self.policy_tree(manifest)?;
 
-        policy_tree::new_list_item_target_at(manifest, self.browser, baseline, current, cursor)
+        policy_tree::new_list_item_target_at(&tree, &self.edits, cursor)
     }
 
     pub fn add_list_item_value_at(
@@ -407,76 +414,43 @@ impl BrowserState {
         cursor: &RowId,
         value: PolicyValue,
     ) -> Option<RowId> {
-        let policy = self.policy.as_ref()?;
-        let baseline = &policy.policies;
-        let current = self.edits.current(baseline);
-        let update = policy_tree::add_list_item_value_at(
-            manifest,
-            self.browser,
-            baseline,
-            current,
-            PolicyValueUpdate {
-                target: cursor.clone(),
-                value,
-            },
-        )?;
+        let before = self.policy_tree(manifest)?;
+        let cursor = policy_tree::add_list_item_value_at(&before, &mut self.edits, cursor, value)?;
 
-        self.push_edit(update.policies);
-        Some(update.cursor)
+        self.bump_policy_tree_version();
+        self.clear_awaiting_policy_change();
+
+        Some(cursor)
     }
 
-    pub fn toggle_policy_bool_at(&mut self, manifest: &Manifest, cursor: &RowId) -> bool {
-        self.edit_current(|browser, baseline, current| {
-            policy_tree::toggle_bool_at(manifest, browser, baseline, current, cursor)
-        })
+    pub fn toggle_policy_bool_at(&mut self, cursor: &RowId) -> bool {
+        self.edit_stage(|stage| policy_tree::toggle_bool_at(stage, cursor))
     }
 
-    pub fn editable_policy_value_at(
-        &self,
-        manifest: &Manifest,
-        cursor: &RowId,
-    ) -> Option<EditablePolicyValue> {
-        let (baseline, current) = self.policy_sets()?;
-
-        policy_tree::editable_value_at(manifest, self.browser, baseline, current, cursor)
+    pub fn editable_policy_value_at(&self, cursor: &RowId) -> Option<EditablePolicyValue> {
+        policy_tree::editable_value_at(&self.edits, cursor)
     }
 
     pub fn set_policy_value_at(&mut self, cursor: &RowId, value: PolicyValue) -> bool {
-        self.edit_current(|_, _, current| {
-            policy_tree::set_value_at(
-                current,
-                PolicyValueUpdate {
-                    target: cursor.clone(),
-                    value,
-                },
-            )
-        })
+        self.edit_stage(|stage| policy_tree::set_value_at(stage, cursor, value))
     }
 
     pub fn policy_key_cursor(&self, manifest: &Manifest, key: &str) -> Option<RowId> {
-        let (baseline, current) = self.policy_sets()?;
+        let tree = self.policy_tree(manifest)?;
 
-        policy_tree::key_cursor(manifest, self.browser, baseline, current, key)
+        policy_tree::key_cursor(&tree, key)
     }
 
-    fn edit_current(
-        &mut self,
-        update: impl FnOnce(Browser, &PolicySet, &PolicySet) -> Option<PolicySet>,
-    ) -> bool {
-        let updated = {
-            let Some(policy) = &self.policy else {
-                return false;
-            };
-            let baseline = &policy.policies;
-            let current = self.edits.current(baseline);
-            let Some(updated) = update(self.browser, baseline, current) else {
-                return false;
-            };
+    fn edit_stage(&mut self, update: impl FnOnce(&mut PolicyStage) -> bool) -> bool {
+        if self.policy.is_none() {
+            return false;
+        }
+        if !update(&mut self.edits) {
+            return false;
+        }
 
-            updated
-        };
-
-        self.push_edit(updated);
+        self.bump_policy_tree_version();
+        self.clear_awaiting_policy_change();
         true
     }
 
@@ -496,16 +470,6 @@ impl BrowserState {
         {
             self.managed_policy_watcher = None;
         }
-    }
-
-    fn push_edit(&mut self, policies: PolicySet) {
-        let Some(policy) = &self.policy else {
-            return;
-        };
-
-        self.edits.push(&policy.policies, policies);
-        self.bump_policy_tree_version();
-        self.clear_awaiting_policy_change();
     }
 
     fn bump_policy_tree_version(&mut self) {
@@ -549,12 +513,12 @@ impl BrowserState {
 }
 
 fn missing_policy_with_defaults(
+    manifest: &Manifest,
     browser: Browser,
-    preset: PolicySet,
-) -> (BrowserPolicy, EditHistory) {
+    preset: &PolicySet,
+) -> (BrowserPolicy, PolicyStage) {
     let baseline = PolicySet::new();
-    let mut edits = EditHistory::default();
-    edits.push(&baseline, preset);
+    let edits = PolicyStage::with_current(manifest, browser, &baseline, preset);
 
     (
         BrowserPolicy {
