@@ -426,6 +426,16 @@ pub(crate) fn editable_value_at(
     stage: &PolicyStage,
     cursor: &RowId,
 ) -> Option<EditablePolicyValue> {
+    if matches!(
+        cursor.target(),
+        RowTarget::ListItem {
+            current_index: None,
+            ..
+        }
+    ) {
+        return None;
+    }
+
     editable_value(target_value(stage, cursor)?)
 }
 
@@ -1516,6 +1526,50 @@ mod tests {
             )),
             "removed recommended extension should remain visible as a restorable row",
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn deleted_list_item_is_not_editable() -> anyhow::Result<()> {
+        let manifest = Manifest::load()?;
+        let browser = Browser::Chrome;
+        let mut baseline = PolicySet::new();
+        baseline.insert(
+            EXTENSION_INSTALL_FORCELIST.to_owned(),
+            PolicyValue::List(vec![string("removed-extension")]),
+        );
+        let mut current = PolicySet::new();
+        current.insert(
+            EXTENSION_INSTALL_FORCELIST.to_owned(),
+            PolicyValue::List(vec![]),
+        );
+
+        let stage = PolicyStage::with_current(&manifest, browser, &baseline, &current);
+        let tree = PolicyTree::build(&manifest, browser, &stage, None);
+        let deleted = tree
+            .rows
+            .iter()
+            .find(|row| {
+                matches!(
+                    (&row.kind, row.target()),
+                    (
+                        PolicyTreeRowKind::Value {
+                            status: RowStatus::Deleted,
+                            ..
+                        },
+                        RowTarget::ListItem {
+                            current_index: None,
+                            restore: Some(_),
+                            ..
+                        },
+                    )
+                )
+            })
+            .map(|row| row.id().clone())
+            .ok_or_else(|| anyhow::anyhow!("deleted list item should be visible"))?;
+
+        assert!(editable_value_at(&stage, &deleted).is_none());
 
         Ok(())
     }
