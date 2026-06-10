@@ -59,6 +59,7 @@ policyGroups:
       ComposeInlineEnabled: false
       AIGenThemesEnabled: false
       EdgeHistoryAISearchEnabled: false
+      CopilotAddressBarSuggestionsEnabled: false
   edgeFeatures:
     label: Edge Features
     targets: [ edge ]
