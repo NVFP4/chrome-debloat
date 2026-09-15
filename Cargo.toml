@@ -29,6 +29,7 @@ windows-registry = "0.6.1"
 
 [build-dependencies]
 flate2 = "1.1.9"
+serde_yaml = "0.9.34"
 
 [profile.release]
 strip = true
