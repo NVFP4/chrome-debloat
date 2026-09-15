@@ -3,7 +3,6 @@ policyGroups:
     label: Extensions
     targets: [ chrome, brave, edge ]
     settings:
-      ExtensionManifestV2Availability: 2
       ExtensionInstallForcelist: []
   braveTelemetry:
     name: Brave Telemetry
@@ -341,39 +340,33 @@ extensions:
   ublock:
     name: uBlock Origin
     id: cjpalhdlnbpafiamejdnhcphjbkeiagm
-    targets: [ brave ]
-    settings:
-      ExtensionManifestV2Availability: 2
+    targets: [ ] # Manifest v2 no longer supported
   ublockLite:
     name: uBlock Origin Lite
     id: ddkjiahejlhfcafbddmgiahcphecmpfh
-    targets: [ chrome, yandex ]
-  ublockLiteEdge:
-    name: uBlock Origin Lite
-    id: cimighlppcgcoapaliogpjjdehbnofhn
-    targets: [ edge ]
-  ublockEdge:
-    name: uBlock Origin
-    id: odfafepnkmbhccpbejgmiehpchacaeak
-    targets: [ edge ]
-    settings:
-      ExtensionManifestV2Availability: 2
+    targets: [ chrome, brave, yandex ]
   isdcac:
     name: I still don't care about cookies
     id: edibdbjcniadpccecjdfdjjppcpchdlm
-    targets: [ chrome, brave, edge, yandex ]
+    targets: [ chrome, brave, yandex ]
   cad:
     name: Cookie AutoDelete
     id: fhcgjolkccmbidfldomjliifgaodjagh
-    targets: [ brave, edge ]
-    settings:
-      ExtensionManifestV2Availability: 2
+    targets: [ ] # Manifest v2 no longer supported
+  ublockLiteEdge:
+    name: uBlock Origin Lite [Edge Addons Store]
+    id: cimighlppcgcoapaliogpjjdehbnofhn
+    targets: [ edge ]
+  ublockEdge:
+    name: uBlock Origin [Edge Addons Store]
+    id: odfafepnkmbhccpbejgmiehpchacaeak
+    targets: [ edge ]
   isdcacEdge:
-    name: I still don't care about cookies
+    name: I still don't care about cookies [Edge Addons Store]
     id: kkacdgacpkediooahopgcbdahlpipheh
     targets: [ edge ]
   blankTabEdge:
-    name: Blank Tab
+    name: Blank Tab [Edge Addons Store]
     id: ihknoknoahjhldmpdoajjdkfjhddgpcd
     targets: [ edge ]
 # presets enables the declared policy groups
@@ -389,7 +382,7 @@ presets:
       - chromiumSignInSync
       - chromiumMisc
       extensions:
-      - ublock
+      - ublockLite
       - isdcac
   chrome:
     balanced:
@@ -416,7 +409,7 @@ presets:
       - chromiumSignInSync
       - chromiumMisc
       extensions:
-      - ublockEdge
+      - ublockLiteEdge
       - isdcacEdge
       - blankTabEdge
   yandex:

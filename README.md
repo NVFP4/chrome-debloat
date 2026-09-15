@@ -16,13 +16,13 @@ Instantly disable telemetry, promotional clutter, and browser bloat while mainta
 - Tighten Site-Shield settings (disable location detection, notifications, etc)
 - Install content-blocking extensions:
   - **Brave**
-    - uBlock Origin
     - I still don't care about cookies
+    - uBlock Origin must be enabled manually at [`brave://settings/extensions/v2`](brave://settings/extensions/v2)
   - **Chrome**
     - uBlock Origin Lite
     - I still don't care about cookies
   - **Edge** (from edge addons store)
-    - uBlock Origin
+    - uBlock Origin Lite
     - I still don't care about cookies
     - Blank Tab
 

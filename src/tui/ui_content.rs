@@ -519,10 +519,7 @@ fn child_value_display_row(
             Span::raw(" "),
             Span::styled(value.child_label().to_owned(), row_format.value_style),
             Span::raw(" "),
-            Span::styled(
-                format!("({extension_name})"),
-                row_format.extension_name_style,
-            ),
+            Span::styled(extension_name.to_owned(), row_format.extension_name_style),
         ])),
         None => ContentRow::left(Line::from_iter([
             Span::raw("  ".repeat(indent)),
