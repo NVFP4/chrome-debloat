@@ -255,6 +255,87 @@ policyGroups:
       ShoppingListEnabled: false
       SuggestedContentEnabled: false
       PromotionsEnabled: false
+  yandexExt:
+    label: Extensions
+    targets: [ yandex ]
+    settings:
+      ExtensionInstallForcelist: []
+  yandexTelemetry:
+    label: Yandex Telemetry
+    targets: [ yandex ]
+    settings:
+      BrowserNetworkTimeQueriesEnabled: false
+      CrashesReporting: false
+      SafeBrowsingExtendedReportingEnabled: false
+      SpellCheckServiceEnabled: false
+      StatisticsReporting: false
+      YandexCloudLanguageDetectEnabled: false
+  yandexGenAI:
+    label: Yandex AI
+    targets: [ yandex ]
+    settings:
+      NeuroNtpTools: false
+      NeuroQuestionEnabled: false
+      YandexAliceMsgDisable: true
+      YandexImageDescriberButtonEnabled: false
+      YandexNeuroEdit: false
+      YandexSummarizationDisable: true
+      YandexVideoSummarization: false
+  yandexFeatures:
+    label: Yandex Features
+    targets: [ yandex ]
+    settings:
+      AlternateErrorPagesEnabled: false
+      CloudDocumentsDisabled: true
+      Education: false
+      EnableBackgroundAnimationHighResolution: false
+      EnableSearchByImageInSystemMenu: false
+      FastSignup: false
+      NtpNotificationsDisable: true
+      SidePanelMode: 2
+      WebGalleryRotation: false
+      WelcomeExperiments: false
+      YandexButtonDisable: true
+      YandexCopyShareButton: false
+      YandexEcomEnabled: false
+      YandexShowWebReviews: false
+      YandexTranslateVideosButton: false
+      YandexVideoQR: false
+  yandexSiteShield:
+    label: Site-Shield
+    targets: [ yandex ]
+    settings:
+      DefaultGeolocationSetting: 2
+      DefaultLocalFontsSetting: 2
+      DefaultNotificationsSetting: 2
+  yandexSiteShieldSensors:
+    label: Site-Shield Sensors & Devices
+    targets: [ yandex ]
+    settings:
+      DefaultSensorsSetting: 2
+      DefaultSerialGuardSetting: 2
+      DefaultWebBluetoothGuardSetting: 2
+      DefaultWebHidGuardSetting: 2
+      DefaultWebUsbGuardSetting: 2
+  yandexSignInSync:
+    label: Sign-in and Sync
+    targets: [ yandex ]
+    settings:
+      YandexDisableID: true
+      YandexSyncEnabled: false
+  yandexPassword:
+    label: Password Manager
+    targets: [ yandex ]
+    settings:
+      PasswordManagerEnabled: true
+  yandexMisc:
+    label: Miscellaneous
+    targets: [ yandex ]
+    settings:
+      BackgroundModeEnabled: false
+      ChromeVariations: 1
+      DefaultBrowserSettingEnabled: false
+      DnsOverHttpsMode: automatic
 
 extensions:
   ublock:
@@ -266,7 +347,11 @@ extensions:
   ublockLite:
     name: uBlock Origin Lite
     id: ddkjiahejlhfcafbddmgiahcphecmpfh
-    targets: [ chrome ]
+    targets: [ chrome, yandex ]
+  ublockLiteEdge:
+    name: uBlock Origin Lite
+    id: cimighlppcgcoapaliogpjjdehbnofhn
+    targets: [ edge ]
   ublockEdge:
     name: uBlock Origin
     id: odfafepnkmbhccpbejgmiehpchacaeak
@@ -276,7 +361,7 @@ extensions:
   isdcac:
     name: I still don't care about cookies
     id: edibdbjcniadpccecjdfdjjppcpchdlm
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, yandex ]
   cad:
     name: Cookie AutoDelete
     id: fhcgjolkccmbidfldomjliifgaodjagh
@@ -334,3 +419,18 @@ presets:
       - ublockEdge
       - isdcacEdge
       - blankTabEdge
+  yandex:
+    balanced:
+      policyGroups:
+      - yandexExt
+      - yandexTelemetry
+      - yandexGenAI
+      - yandexFeatures
+      - yandexSiteShield
+      - yandexSiteShieldSensors
+      - yandexSignInSync
+      - yandexPassword
+      - yandexMisc
+      extensions:
+      - ublockLite
+      - isdcac

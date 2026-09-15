@@ -229,6 +229,13 @@ fn mobileconfig_metadata(browser: Browser) -> MobileConfigMetadata {
             payload_uuid: "778fb3c3-2e58-4337-86dc-1a8044793d2d",
             content_uuid: "65ffbe44-b556-4c33-88ea-ab684dab69bc",
         },
+        Browser::Yandex => MobileConfigMetadata {
+            display_name: "Yandex Browser Policies",
+            description: "Yandex Browser system-level policies",
+            identifier: "ru.yandex.desktop.yandex-browser",
+            payload_uuid: "61496CB6-D284-4A04-805E-B5334F887B39",
+            content_uuid: "395E405C-5300-45F7-A770-61BDB3F94165",
+        },
     }
 }
 
@@ -244,6 +251,7 @@ fn browser_slug(browser: Browser) -> &'static str {
         Browser::Brave => "brave",
         Browser::Chrome => "chrome",
         Browser::Edge => "edge",
+        Browser::Yandex => "yandex",
     }
 }
 
@@ -252,6 +260,9 @@ fn policy_path(browser: Browser) -> PathBuf {
         Browser::Brave => PathBuf::from("/Library/Managed Preferences/com.brave.Browser.plist"),
         Browser::Chrome => PathBuf::from("/Library/Managed Preferences/com.google.Chrome.plist"),
         Browser::Edge => PathBuf::from("/Library/Managed Preferences/com.microsoft.Edge.plist"),
+        Browser::Yandex => {
+            PathBuf::from("/Library/Managed Preferences/ru.yandex.desktop.yandex-browser.plist")
+        }
     }
 }
 

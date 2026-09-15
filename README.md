@@ -30,9 +30,10 @@ Instantly disable telemetry, promotional clutter, and browser bloat while mainta
 
 | Browser        | Windows | macOS | Linux |
 | -------------- | ------- | ----- | ----- |
-| Google Chrome  | ✅      | ✅    | ✅    |
-| Microsoft Edge | ✅      | ✅    | ✅    |
-| Brave          | ✅      | ✅    | ✅    |
+| Google Chrome  | Yes     | Yes   | Yes   |
+| Microsoft Edge | Yes     | Yes   | Yes   |
+| Brave          | Yes     | Yes   | Yes   |
+| Yandex Browser | Yes     | Yes   | Yes   |
 
 ## Quick Start
 
@@ -83,7 +84,7 @@ After entering your credentials, the policies will take effect.
 
 ### Choosing Browsers
 
-You can press numbers `1`, `2`, `3` to select the browser from the tab for which policies will be applied.
+You can press numbers `1` to `4` to select the browser whose policies you want to change.
 
 <img src="./docs/browser-tabs.png" alt="browser tabs" width="640px"/>
 
@@ -138,6 +139,7 @@ If you want to delete all policies for the selected browser, press `U` (`Shift+u
 - [Chrome Enterprise Policies](https://chromeenterprise.google/policies/)
 - [Brave Policies](https://support.brave.com/hc/en-us/articles/360039248271-Group-Policy)
 - [Microsoft Edge Policies](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies)
+- [Yandex Browser policies](https://browser.yandex.ru/support/browser-corporate/ru/policy/list-en)
 
 ## License
 

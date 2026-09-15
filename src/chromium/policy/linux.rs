@@ -87,5 +87,6 @@ fn policy_path(browser: Browser) -> PathBuf {
         Browser::Brave => PathBuf::from("/etc/brave/policies/managed/brave.json"),
         Browser::Chrome => PathBuf::from("/etc/opt/chrome/policies/managed/chrome.json"),
         Browser::Edge => PathBuf::from("/etc/opt/edge/policies/managed/edge.json"),
+        Browser::Yandex => PathBuf::from("/etc/opt/yandex/browser/policies/managed/yandex.json"),
     }
 }
