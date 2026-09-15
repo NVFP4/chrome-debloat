@@ -233,8 +233,8 @@ fn mobileconfig_metadata(browser: Browser) -> MobileConfigMetadata {
             display_name: "Yandex Browser Policies",
             description: "Yandex Browser system-level policies",
             identifier: "ru.yandex.desktop.yandex-browser",
-            payload_uuid: "61496CB6-D284-4A04-805E-B5334F887B39",
-            content_uuid: "395E405C-5300-45F7-A770-61BDB3F94165",
+            payload_uuid: "61496cb6-d284-4a04-805e-b5334f887b39",
+            content_uuid: "395e405c-5300-45f7-a770-61bdb3f94165",
         },
     }
 }
