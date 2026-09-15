@@ -64,6 +64,7 @@ fn browser_exe_name(browser: Browser) -> &'static str {
         Browser::Brave => "brave.exe",
         Browser::Chrome => "chrome.exe",
         Browser::Edge => "msedge.exe",
+        Browser::Yandex => "browser.exe",
     }
 }
 

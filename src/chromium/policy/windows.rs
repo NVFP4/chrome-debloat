@@ -408,6 +408,7 @@ fn policy_root_path(browser: Browser) -> &'static str {
         Browser::Brave => r"SOFTWARE\Policies\BraveSoftware\Brave",
         Browser::Chrome => r"SOFTWARE\Policies\Google\Chrome",
         Browser::Edge => r"SOFTWARE\Policies\Microsoft\Edge",
+        Browser::Yandex => r"SOFTWARE\Policies\YandexBrowser",
     }
 }
 

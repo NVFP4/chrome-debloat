@@ -6,11 +6,14 @@ pub enum Browser {
     Brave,
     Chrome,
     Edge,
+    Yandex,
 }
 
 impl Browser {
-    pub const fn all() -> [Self; 3] {
-        [Self::Brave, Self::Chrome, Self::Edge]
+    pub const COUNT: usize = 4;
+
+    pub const fn all() -> [Self; Self::COUNT] {
+        [Self::Brave, Self::Chrome, Self::Edge, Self::Yandex]
     }
 
     pub const fn name(self) -> &'static str {
@@ -18,6 +21,7 @@ impl Browser {
             Self::Brave => "Brave",
             Self::Chrome => "Chrome",
             Self::Edge => "Edge",
+            Self::Yandex => "Yandex",
         }
     }
 
@@ -26,6 +30,7 @@ impl Browser {
             Self::Brave => "brave",
             Self::Chrome => "chrome",
             Self::Edge => "edge",
+            Self::Yandex => "yandex",
         }
     }
 }

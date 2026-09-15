@@ -20,7 +20,7 @@ pub(crate) const REPORT_ISSUE_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), 
 #[derive(Debug)]
 pub struct App {
     manifest: Manifest,
-    browsers: [BrowserState; 3],
+    browsers: [BrowserState; Browser::COUNT],
     active_browser_index: usize,
     tui: TuiState,
     policy_tree_cache: Option<PolicyTreeCache>,
@@ -133,7 +133,7 @@ impl App {
         Ok(app)
     }
 
-    pub const fn browsers(&self) -> &[BrowserState; 3] {
+    pub const fn browsers(&self) -> &[BrowserState; Browser::COUNT] {
         &self.browsers
     }
 
