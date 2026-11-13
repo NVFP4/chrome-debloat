@@ -25,7 +25,18 @@ pub(crate) struct PolicyGroup {
     pub id: String,
     pub name: String,
     pub targets: Vec<Browser>,
+    pub visibility: GroupVisibility,
     pub settings: Vec<PolicySetting>,
+}
+
+/// Which settings of a policy group the policy tree lists.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum GroupVisibility {
+    #[default]
+    Always,
+    /// Only settings the browser currently has
+    OnlyApplied,
 }
 
 #[derive(Debug)]
@@ -73,6 +84,8 @@ struct RawPolicyGroup {
     name: Option<String>,
     label: Option<String>,
     targets: Vec<String>,
+    #[serde(default)]
+    visibility: GroupVisibility,
     settings: IndexMap<String, serde_yaml::Value>,
 }
 
@@ -180,7 +193,7 @@ impl Manifest {
             .any(|group| group.settings.iter().any(|setting| setting.key == key))
     }
 
-    fn from_yaml(yaml: &str) -> Result<Self, ManifestError> {
+    pub(crate) fn from_yaml(yaml: &str) -> Result<Self, ManifestError> {
         let raw = serde_yaml::from_str::<RawManifest>(yaml)?;
         let policy_groups = raw
             .policy_groups
@@ -232,6 +245,7 @@ impl RawPolicyGroup {
             id,
             name,
             targets,
+            visibility: self.visibility,
             settings,
         })
     }

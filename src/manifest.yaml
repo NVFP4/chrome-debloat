@@ -5,13 +5,13 @@ policyGroups:
     settings:
       ExtensionInstallForcelist: []
   braveTelemetry:
-    name: Brave Telemetry
+    label: Brave Telemetry
     targets: [ brave ]
     settings:
       BraveP3AEnabled: false
       BraveStatsPingEnabled: false
   braveFeatures:
-    name: Brave Features
+    label: Brave Features
     targets: [ brave ]
     settings:
       BraveAIChatEnabled: false
@@ -162,8 +162,9 @@ policyGroups:
       EdgeSafeHostingExtensionEnabled: false
       EdgeWalletCheckoutEnabled: false
   edgeObsolete:
-    label: Edge Obsolete
+    label: Edge Obsolete (Safe To Remove)
     targets: [ edge ]
+    visibility: onlyApplied
     settings:
       LinkedAccountEnabled: false
       AddressBarMicrosoftSearchInBingProviderEnabled: false
@@ -180,75 +181,78 @@ policyGroups:
       EdgeDiscoverEnabled: false
       LiveTranslationAllowed: false
   chromiumTelemetry:
-    label: Telemetry
+    label: Chromium Telemetry
     targets: [ chrome, brave, edge ]
     settings:
       UserSecurityAuthenticatedReporting: false
       UserSecuritySignalsReporting: false
-      MetricsReportingEnabled: false # obsolete
+      MetricsReportingEnabled: false # obsolete in Edge
       FeedbackSurveysEnabled: false
       UserFeedbackAllowed: false
-      SafeBrowsingExtendedReportingEnabled: false
       SafeBrowsingSurveysEnabled: false
+      DomainReliabilityAllowed: false
+      UrlKeyedAnonymizedDataCollectionEnabled: false
+      WebRtcEventLogCollectionAllowed: false
+      WebRtcTextLogCollectionAllowed: false
   chromiumGenAI:
-    label: Generative AI
+    label: Chromium Generative AI
     targets: [ chrome, brave, edge ]
     settings:
       AIModeSettings: 1
-      AutofillPredictionSettings: 2
+      AutofillGenAiSettings: 2
+      AutofillPredictionSettings: 2 # deprecated
+      ChromeSuggestionsSettings: 1
       CreateThemesSettings: 2
       DevToolsGenAiSettings: 2
       GeminiActOnWebSettings: 1
+      GeminiChromeFileUploadSettings: 1
       GeminiSettings: 1
-      GenAIInlineImageSettings: 2
+      GeminiSparkSettings: 1
       GenAILocalFoundationalModelSettings: 1
-      GenAIPhotoEditingSettings: 2
-      GenAISmartGroupingSettings: 1 # allow grouping, but do not improve models
-      GenAIVcBackgroundSettings: 2
-      GenAIWallpaperSettings: 2
       GenAiDefaultSettings: 2
-      HelpMeReadSettings: 2
       HelpMeWriteSettings: 2
-      HistorySearchSettings: 2
       SearchContentSharingSettings: 1
+      SmartTabSharingSettings: 1
       TabCompareSettings: 2
+      ThirdPartyAiChatSettings: 1
+      TryOnYouSettings: 2
+      VoiceTypingSettings: 2
       BuiltInAIAPIsEnabled: false
   chromiumSiteShield:
-    label: Site-Shield
+    label: Chromium Site-Shield
     targets: [ chrome, brave, edge ]
     settings:
       DefaultGeolocationSetting: 2
       DefaultLocalFontsSetting: 2
       DefaultNotificationsSetting: 2
       DefaultIdleDetectionSetting: 2
-      RelatedWebsiteSetsEnabled: false # deprecated
       PreciseGeolocationAllowedForUrls:
       - ""
   chromiumSiteShieldSensors:
-    label: Site-Shield Sensors & Devices
+    label: Chromium Site-Shield Sensors & Devices
     targets: [ chrome, brave, edge ]
     settings:
       DefaultSensorsSetting: 2
       DefaultSerialGuardSetting: 2
-      DefaultSmartCardConnectSetting: 2
       DefaultWebBluetoothGuardSetting: 2
       DefaultWebHidGuardSetting: 2
       DefaultWebUsbGuardSetting: 2
   chromiumSignInSync:
-    label: Sign-in and Sync
+    label: Chromium Sign-in and Sync
     targets: [ chrome, brave, edge ]
     settings:
       BrowserSignin: 0
       SyncDisabled: true
+      SigninInterceptionEnabled: false
   chromiumPassword:
-    label: Password Manager
+    label: Chromium Password Manager
     targets: [ chrome, brave, edge ]
     settings:
       PasswordManagerEnabled: true
       PasswordManagerPasskeysEnabled: true
       PasswordSharingEnabled: false
   chromiumMisc:
-    label: Miscellaneous
+    label: Chromium Miscellaneous
     targets: [ chrome, brave, edge ]
     settings:
       # Network
@@ -262,14 +266,37 @@ policyGroups:
       BrowserGuestModeEnforced: false
       BrowserLabsEnabled: false
       DefaultBrowserSettingEnabled: false
+      DevToolsGoogleDeveloperProgramProfileAvailability: 2
+      GoogleSearchSidePanelEnabled: false
+      MediaRecommendationsEnabled: false
+      NTPCardsVisible: false
+      NTPFooterManagementNoticeEnabled: false
+      ShoppingListEnabled: false
+      SideSearchEnabled: false
+      PromotionsEnabled: false
+  chromiumObsolete:
+    label: Chromium Obsolete (Safe To Remove)
+    targets: [ chrome, brave, edge ]
+    visibility: onlyApplied
+    settings:
+      # ChromeOS only
+      DefaultSmartCardConnectSetting: 2
+      GenAIInlineImageSettings: 2
+      GenAIPhotoEditingSettings: 2
+      GenAISmartGroupingSettings: 1 # allow grouping, but do not improve models
+      GenAIVcBackgroundSettings: 2
+      GenAIWallpaperSettings: 2
+      HelpMeReadSettings: 2
       QuickAnswersDefinitionEnabled: false
       QuickAnswersEnabled: false
       QuickAnswersTranslationEnabled: false
-      ShoppingListEnabled: false
       SuggestedContentEnabled: false
-      PromotionsEnabled: false
+      # Removed from Chrome
+      HistorySearchSettings: 2
+      RelatedWebsiteSetsEnabled: false
+      SafeBrowsingExtendedReportingEnabled: false
   yandexExt:
-    label: Extensions
+    label: Yandex Extensions
     targets: [ yandex ]
     settings:
       ExtensionInstallForcelist: []
@@ -315,14 +342,14 @@ policyGroups:
       YandexTranslateVideosButton: false
       YandexVideoQR: false
   yandexSiteShield:
-    label: Site-Shield
+    label: Yandex Site-Shield
     targets: [ yandex ]
     settings:
       DefaultGeolocationSetting: 2
       DefaultLocalFontsSetting: 2
       DefaultNotificationsSetting: 2
   yandexSiteShieldSensors:
-    label: Site-Shield Sensors & Devices
+    label: Yandex Site-Shield Sensors & Devices
     targets: [ yandex ]
     settings:
       DefaultSensorsSetting: 2
@@ -331,18 +358,18 @@ policyGroups:
       DefaultWebHidGuardSetting: 2
       DefaultWebUsbGuardSetting: 2
   yandexSignInSync:
-    label: Sign-in and Sync
+    label: Yandex Sign-in and Sync
     targets: [ yandex ]
     settings:
       YandexDisableID: true
       YandexSyncEnabled: false
   yandexPassword:
-    label: Password Manager
+    label: Yandex Password Manager
     targets: [ yandex ]
     settings:
       PasswordManagerEnabled: true
   yandexMisc:
-    label: Miscellaneous
+    label: Yandex Miscellaneous
     targets: [ yandex ]
     settings:
       BackgroundModeEnabled: false

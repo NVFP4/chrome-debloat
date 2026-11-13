@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::chromium::Browser;
 use crate::chromium::policy::{PolicySet, PolicyValue};
 use crate::diff::DiffCounts;
-use crate::manifest::{Manifest, PolicySetting};
+use crate::manifest::{GroupVisibility, Manifest, PolicySetting};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BaseIndex(pub usize);
@@ -1327,7 +1327,7 @@ fn group_bases(
         let items = group
             .settings
             .iter()
-            .map(|setting| policy_item_from_setting(setting, baseline))
+            .filter_map(|setting| policy_item_from_setting(setting, group.visibility, baseline))
             .collect();
         groups.push((PolicyGroupId::manifest(&group.id), items));
     }
@@ -1335,10 +1335,18 @@ fn group_bases(
     groups
 }
 
-fn policy_item_from_setting(setting: &PolicySetting, baseline: &PolicySet) -> PolicyItem {
-    match baseline.get(&setting.key) {
-        Some(value) => PolicyItem::applied(setting.key.as_str(), value.clone()),
-        None => PolicyItem::not_applied(setting.key.as_str(), setting.value.clone()),
+fn policy_item_from_setting(
+    setting: &PolicySetting,
+    visibility: GroupVisibility,
+    baseline: &PolicySet,
+) -> Option<PolicyItem> {
+    match (baseline.get(&setting.key), visibility) {
+        (Some(value), _) => Some(PolicyItem::applied(setting.key.as_str(), value.clone())),
+        (None, GroupVisibility::Always) => Some(PolicyItem::not_applied(
+            setting.key.as_str(),
+            setting.value.clone(),
+        )),
+        (None, GroupVisibility::OnlyApplied) => None,
     }
 }
 
