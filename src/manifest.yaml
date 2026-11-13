@@ -59,6 +59,7 @@ policyGroups:
       AIGenThemesEnabled: false
       EdgeHistoryAISearchEnabled: false
       CopilotAddressBarSuggestionsEnabled: false
+      CopilotCoworkToolActionsEnabled: false
   edgeFeatures:
     label: Edge Features
     targets: [ edge ]
@@ -79,7 +80,6 @@ policyGroups:
       EdgeWorkspacesEnabled: false
       # Extensions
       ControlDefaultStateOfAllowExtensionFromOtherStoresSettingEnabled: true
-      EdgeSafeHostingExtensionEnabled: false
       # SmartScreen
       SmartScreenDnsRequestsEnabled: false
       SmartScreenEnabled: false
@@ -109,32 +109,41 @@ policyGroups:
       ShowAcrobatSubscriptionButton: false
       # Additional
       AlternateErrorPagesEnabled: false
+      AutoImportAtFirstRun: 4
       BingAdsSuppression: true
-      DriveDisabled: true
+      DefaultBrowserSettingsCampaignEnabled: false
       EdgeAssetDeliveryServiceEnabled: false
-      EdgeCollectionsEnabled: false
-      EdgeDiscoverEnabled: false
+      EdgeAutofillMlEnabled: false
       EdgeEDropEnabled: false
+      EdgeOpenInSidebarEnabled: false
+      EdgeReadingModeServiceBasedExtractionEnabled: false
       EdgeSharedDeviceSupportEnabled: false
       EdgeShoppingAssistantEnabled: false
-      EdgeWalletCheckoutEnabled: false
       ForceBingSafeSearch: 0
+      HideFirstRunExperience: true
       HubsSidebarEnabled: false
       InAppSupportEnabled: false
-      LiveTranslationAllowed: false
+      LocalBrowserDataShareEnabled: false
       MicrosoftEdgeInsiderPromotionEnabled: false
       MicrosoftEditorProofingEnabled: false
       MicrosoftEditorSynonymsEnabled: false
-      ParcelTrackingEnabled: false
+      NTPContentSuggestionsEnabled: false
       PersonalizeTopSitesInCustomizeSidebarEnabled: false
       PictureInPictureOverlayEnabled: false
+      PinningWizardAllowed: false
+      QuickSearchShowMiniMenu: false
       ReadAloudEnabled: false
+      ResolveNavigationErrorsUseWebService: false
+      SearchbarAllowed: false
+      SearchbarIsEnabledOnStartup: false
+      SearchForImageEnabled: false
+      SearchInSidebarEnabled: 2
       SharedLinksEnabled: false
-      ShoppingListEnabled: false
       ShowMicrosoftRewards: false
       ShowRecommendationsEnabled: false
       SpellcheckEnabled: false
-      TabServiceEnabled: false
+      StandaloneHubsSidebarEnabled: false
+      TabServicesEnabled: false
       TextPredictionEnabled: false
       TranslateEnabled: true
       UploadFromPhoneEnabled: false
@@ -143,13 +152,15 @@ policyGroups:
     label: Edge Deprecated
     targets: [ edge ]
     settings:
-      AllowGamesMenu: false # deprecated
-      MicrosoftOfficeMenuEnabled: false # deprecated
-      ShowOfficeShortcutInFavoritesBar: false # deprecated
-      EdgeWalletEtreeEnabled: false # deprecated
-      PromotionalTabsEnabled: false # deprecated
-      WalletDonationEnabled: false # deprecated
-      WebWidgetAllowed: false # deprecated
+      AllowGamesMenu: false
+      MicrosoftOfficeMenuEnabled: false
+      ShowOfficeShortcutInFavoritesBar: false
+      EdgeWalletEtreeEnabled: false
+      PromotionalTabsEnabled: false
+      WalletDonationEnabled: false
+      WebWidgetAllowed: false
+      EdgeSafeHostingExtensionEnabled: false
+      EdgeWalletCheckoutEnabled: false
   edgeObsolete:
     label: Edge Obsolete
     targets: [ edge ]
@@ -165,6 +176,9 @@ policyGroups:
       EdgeEnhanceImagesEnabled: false
       EdgeFollowEnabled: false
       MathSolverEnabled: false
+      EdgeCollectionsEnabled: false
+      EdgeDiscoverEnabled: false
+      LiveTranslationAllowed: false
   chromiumTelemetry:
     label: Telemetry
     targets: [ chrome, brave, edge ]
