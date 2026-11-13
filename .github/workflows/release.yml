@@ -39,7 +39,7 @@ jobs:
       version: ${{ steps.bump.outputs.version }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Install Rust and cargo-release
       uses: taiki-e/install-action@v2
@@ -62,7 +62,7 @@ jobs:
         echo "version=$version" >> "$GITHUB_OUTPUT"
 
     - name: Upload version files
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: version-files
         path: |
@@ -99,10 +99,10 @@ jobs:
           asset: chrome-debloat-windows-x86_64.zip
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Apply version bump
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: version-files
 
@@ -126,7 +126,7 @@ jobs:
       run: Compress-Archive -Path target/release/chrome-debloat.exe -DestinationPath "${{ matrix.asset }}"
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: asset-${{ matrix.asset }}
         path: ${{ matrix.asset }}
@@ -146,15 +146,15 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Apply version bump
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: version-files
 
     - name: Download assets
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         pattern: asset-*
         path: dist

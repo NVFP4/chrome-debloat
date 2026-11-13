@@ -42,7 +42,7 @@ jobs:
             artifact: chrome-debloat-windows
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: taiki-e/install-action@v2
@@ -74,7 +74,7 @@ jobs:
 
       - name: Upload binary
         if: ${{ !inputs.skip-binaries }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: |
