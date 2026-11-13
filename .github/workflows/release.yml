@@ -3,7 +3,7 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      release_bump:
+      bump:
         description: Version bump to release
         type: choice
         required: true
@@ -17,336 +17,165 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
-  PACKAGE_NAME: chrome-debloat
 
 jobs:
   check:
-    name: Checks (${{ matrix.label }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - os: ubuntu-latest
-          label: Linux x64
-        - os: ubuntu-24.04-arm
-          label: Linux arm64
-        - os: macos-15-intel
-          label: macOS x64
-        - os: macos-latest
-          label: macOS arm64
-        - os: windows-latest
-          label: Windows x64
-    steps:
-    - name: Checkout main
-      uses: actions/checkout@v4
-      with:
-        ref: main
+    name: Checks
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/check.yml
+    with:
+      skip-binaries: true
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.96.0
-      with:
-        components: clippy
-
-    - name: Install nightly rustfmt
-      uses: dtolnay/rust-toolchain@nightly
-      with:
-        components: rustfmt
-
-    - name: Format
-      run: cargo +nightly fmt --all --check
-
-    - name: Clippy
-      run: cargo +1.96.0 clippy --workspace --all-targets --all-features -- -D warnings
-
-    - name: Build
-      run: cargo +1.96.0 build --workspace --all-features --locked
-
-    - name: Test
-      run: cargo +1.96.0 test --workspace --all-features
-
-  prepare:
-    name: Bump Version and Tag
+  version:
+    name: Bump Version
     needs: check
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
-      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.bump.outputs.version }}
     steps:
-    - name: Checkout main
+    - name: Checkout
       uses: actions/checkout@v4
-      with:
-        ref: main
-        fetch-depth: 0
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.96.0
-
-    - name: Install cargo-release
+    - name: Install Rust and cargo-release
       uses: taiki-e/install-action@v2
       with:
-        tool: cargo-release
+        tool: rust@1.100.0,cargo-release
 
-    - name: Configure git author
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-    - name: Prepare release version
-      shell: bash
+    - name: Bump version
+      id: bump
       env:
-        RELEASE_BUMP: ${{ inputs.release_bump }}
+        BUMP: ${{ inputs.bump }}
       run: |
-        git fetch --force --tags
+        cargo release version "$BUMP" --execute --no-confirm
         version="$(cargo metadata --no-deps --format-version 1 \
-          | jq -er --arg name "$PACKAGE_NAME" '.packages[] | select(.name == $name) | .version')"
+          | jq -er '.packages[] | select(.name == "chrome-debloat") | .version')"
 
-        if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.+)?$ ]]; then
-          echo "Unsupported version format: $version" >&2
+        if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+          echo "Tag v$version already exists." >&2
           exit 1
         fi
+        echo "version=$version" >> "$GITHUB_OUTPUT"
 
-        major="${BASH_REMATCH[1]}"
-        minor="${BASH_REMATCH[2]}"
-        patch="${BASH_REMATCH[3]}"
-        prerelease="${BASH_REMATCH[4]:-}"
-        target=""
-
-        if [[ -z "$prerelease" ]]; then
-          current_tag="v$version"
-          if git rev-parse -q --verify "refs/tags/$current_tag^{commit}" >/dev/null; then
-            tag_commit="$(git rev-list -n 1 "refs/tags/$current_tag")"
-            head_commit="$(git rev-parse HEAD)"
-
-            if [ "$tag_commit" = "$head_commit" ]; then
-              target="$version"
-            fi
-          fi
-        fi
-
-        if [[ -z "$target" ]]; then
-          case "$RELEASE_BUMP" in
-            patch)
-              if [[ -n "$prerelease" ]]; then
-                target="$major.$minor.$patch"
-              else
-                target="$major.$minor.$((patch + 1))"
-              fi
-              ;;
-            minor)
-              target="$major.$((minor + 1)).0"
-              ;;
-            major)
-              target="$((major + 1)).0.0"
-              ;;
-            *)
-              echo "Invalid release bump: $RELEASE_BUMP" >&2
-              exit 1
-              ;;
-          esac
-        fi
-
-        if [[ "$target" = "$version" ]]; then
-          echo "Version $version is already prepared for release."
-        else
-          cargo release "$target" \
-            --execute \
-            --no-confirm \
-            --no-publish \
-            --no-tag \
-            --no-push
-        fi
-
-    - name: Resolve release tag
-      id: release
-      shell: bash
-      run: |
-        version="$(cargo metadata --no-deps --format-version 1 \
-          | jq -er --arg name "$PACKAGE_NAME" '.packages[] | select(.name == $name) | .version')"
-
-        # cargo-release must leave us on a stable version before tagging.
-        if [[ "$version" == *-* ]]; then
-          echo "Refusing to release pre-release version $version." >&2
-          exit 1
-        fi
-
-        TAG="v$version"
-        # Allow reruns after the release commit and tag were pushed but later jobs failed.
-        if git rev-parse -q --verify "refs/tags/$TAG^{commit}" >/dev/null; then
-          tag_commit="$(git rev-list -n 1 "refs/tags/$TAG")"
-          head_commit="$(git rev-parse HEAD)"
-
-          # Never reuse a tag that points at a different commit.
-          if [ "$tag_commit" != "$head_commit" ]; then
-            echo "Tag $TAG already exists at $tag_commit, but this release commit is $head_commit." >&2
-            exit 1
-          fi
-
-          echo "tag_exists=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "tag_exists=false" >> "$GITHUB_OUTPUT"
-        fi
-
-        echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-    - name: Push release commit and tag
-      if: steps.release.outputs.tag_exists == 'false'
-      shell: bash
-      env:
-        TAG: ${{ steps.release.outputs.tag }}
-      run: |
-        git tag -a "$TAG" -m "Release $TAG"
-        git push --atomic origin HEAD:main "refs/tags/$TAG"
+    - name: Upload version files
+      uses: actions/upload-artifact@v4
+      with:
+        name: version-files
+        path: |
+          Cargo.toml
+          Cargo.lock
+        if-no-files-found: error
+        retention-days: 1
 
   build:
     name: Build (${{ matrix.label }})
-    needs: prepare
+    needs: version
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
         include:
         - os: ubuntu-latest
           label: Linux x64
-          target: x86_64-unknown-linux-gnu
           asset: chrome-debloat-linux-x86_64.tar.gz
-          archive: tar
         - os: ubuntu-24.04-arm
           label: Linux arm64
-          target: aarch64-unknown-linux-gnu
           asset: chrome-debloat-linux-aarch64.tar.gz
-          archive: tar
         - os: macos-15-intel
           label: macOS x64
-          target: x86_64-apple-darwin
           asset: chrome-debloat-macos-x86_64.tar.gz
-          archive: tar
         - os: macos-latest
           label: macOS arm64
-          target: aarch64-apple-darwin
           asset: chrome-debloat-macos-aarch64.tar.gz
-          archive: tar
         - os: windows-latest
           label: Windows x64
-          target: x86_64-pc-windows-msvc
           asset: chrome-debloat-windows-x86_64.zip
-          archive: zip
-
     steps:
-    - name: Checkout release tag
+    - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Apply version bump
+      uses: actions/download-artifact@v4
       with:
-        ref: ${{ needs.prepare.outputs.tag }}
+        name: version-files
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.96.0
+      uses: taiki-e/install-action@v2
       with:
-        targets: ${{ matrix.target }}
+        tool: rust@1.100.0
 
     - name: Build
-      run: cargo build --release --locked --target "${{ matrix.target }}"
+      env:
+        APP_RELEASE: '1'
+      run: cargo +1.100.0 build --release --locked
 
     - name: Package tarball
-      if: matrix.archive == 'tar'
-      run: |
-        mkdir -p package
-        cp "target/${{ matrix.target }}/release/chrome-debloat" package/
-        tar -czf "${{ matrix.asset }}" -C package chrome-debloat
-
-    - name: Generate checksum
-      if: matrix.archive == 'tar'
-      run: shasum -a 256 "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+      if: runner.os != 'Windows'
+      run: tar -czf "${{ matrix.asset }}" -C target/release chrome-debloat
 
     - name: Package zip
-      if: matrix.archive == 'zip'
+      if: runner.os == 'Windows'
       shell: pwsh
-      run: |
-        New-Item -ItemType Directory -Path package | Out-Null
-        Copy-Item "target/${{ matrix.target }}/release/chrome-debloat.exe" package/
-        Compress-Archive -Path package/chrome-debloat.exe -DestinationPath "${{ matrix.asset }}"
-
-    - name: Generate checksum
-      if: matrix.archive == 'zip'
-      shell: pwsh
-      run: |
-        $hash = (Get-FileHash -Algorithm SHA256 "${{ matrix.asset }}").Hash.ToLowerInvariant()
-        "$hash  ${{ matrix.asset }}" | Set-Content "${{ matrix.asset }}.sha256"
+      run: Compress-Archive -Path target/release/chrome-debloat.exe -DestinationPath "${{ matrix.asset }}"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.asset }}
-        path: |
-          ${{ matrix.asset }}
-          ${{ matrix.asset }}.sha256
+        name: asset-${{ matrix.asset }}
+        path: ${{ matrix.asset }}
         if-no-files-found: error
+        retention-days: 1
 
-  upload:
-    name: Publish Assets
+  publish:
+    name: Publish
     needs:
-    - prepare
+    - version
     - build
-    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: v${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-    - name: Download artifacts
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Apply version bump
       uses: actions/download-artifact@v4
       with:
+        name: version-files
+
+    - name: Download assets
+      uses: actions/download-artifact@v4
+      with:
+        pattern: asset-*
         path: dist
         merge-multiple: true
 
-    - name: Upload GitHub release assets
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ needs.prepare.outputs.tag }}
-        files: dist/*
-        generate_release_notes: true
+    - name: Generate checksums
+      working-directory: dist
+      run: for f in *; do sha256sum "$f" > "$f.sha256"; done
 
-  next-version:
-    name: Next Dev Version
-    needs:
-    - prepare
-    - upload
-    if: needs.upload.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - name: Checkout main
-      uses: actions/checkout@v4
-      with:
-        ref: main
-        fetch-depth: 0
-
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.96.0
-
-    - name: Install cargo-release
-      uses: taiki-e/install-action@v2
-      with:
-        tool: cargo-release
-
-    - name: Configure git author
+    - name: Push release commit and tag
       run: |
+        if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+          echo "$TAG already pushed."
+          exit 0
+        fi
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -am "chore: Release chrome-debloat version ${TAG#v}"
+        git tag -a "$TAG" -m "Release $TAG"
+        # Rejected if main moved since checks ran.
+        git push --atomic origin HEAD:refs/heads/main "refs/tags/$TAG"
 
-    - name: Bump next alpha version
-      shell: bash
-      run: |
-        cargo release alpha \
-          --execute \
-          --no-confirm \
-          --no-publish \
-          --no-tag \
-          --no-push
-
-    - name: Push next version commit
-      run: git push origin HEAD:main
+    - name: Create GitHub release
+      run: gh release create "$TAG" dist/* --verify-tag --generate-notes
