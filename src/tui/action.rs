@@ -14,6 +14,8 @@ pub enum Action {
     ConfirmQuit,
     ConfirmRevert,
     ConfirmUninstall,
+    BackspaceDialogInput,
+    InputDialog(char),
     InputFilter(char),
     InputPolicyEdit(char),
     LocateExportFile,

@@ -14,6 +14,7 @@ mod ui_filter;
 mod ui_footer;
 mod ui_header;
 mod ui_help;
+mod ui_identify;
 mod ui_quit;
 mod ui_revert;
 mod ui_summary;

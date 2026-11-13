@@ -7,13 +7,21 @@ pub enum Browser {
     Chrome,
     Edge,
     Yandex,
+    /// Any other Chromium browser, located by a user-supplied policy identifier.
+    Chromium,
 }
 
 impl Browser {
-    pub const COUNT: usize = 4;
+    pub const COUNT: usize = 5;
 
     pub const fn all() -> [Self; Self::COUNT] {
-        [Self::Brave, Self::Chrome, Self::Edge, Self::Yandex]
+        [
+            Self::Brave,
+            Self::Chrome,
+            Self::Edge,
+            Self::Yandex,
+            Self::Chromium,
+        ]
     }
 
     pub const fn name(self) -> &'static str {
@@ -22,6 +30,7 @@ impl Browser {
             Self::Chrome => "Chrome",
             Self::Edge => "Edge",
             Self::Yandex => "Yandex",
+            Self::Chromium => "Any Chromium",
         }
     }
 
@@ -31,6 +40,7 @@ impl Browser {
             Self::Chrome => "chrome",
             Self::Edge => "edge",
             Self::Yandex => "yandex",
+            Self::Chromium => "chromium",
         }
     }
 }

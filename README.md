@@ -34,6 +34,17 @@ Instantly disable telemetry, promotional clutter, and browser bloat while mainta
 | Microsoft Edge | Yes     | Yes   | Yes   |
 | Brave          | Yes     | Yes   | Yes   |
 | Yandex Browser | Yes     | Yes   | Yes   |
+| Any Chromium   | Yes     | Yes   | Yes   |
+
+**Any Chromium** (tab `5`) covers Chromium browsers not listed above. Press `5` and enter where the browser reads its policies:
+
+| Platform | Identifier                                   | Example                 | Policies location                                     |
+| -------- | -------------------------------------------- | ----------------------- | ----------------------------------------------------- |
+| Windows  | registry key under `HKLM\SOFTWARE\Policies\` | `Chromium`              | `HKLM\SOFTWARE\Policies\Chromium`                     |
+| macOS    | the browser's bundle ID                      | `org.chromium.Chromium` | `/Library/Managed Preferences/org.chromium.Chromium.plist` |
+| Linux    | directory under `/etc`                       | `chromium`              | `/etc/chromium/policies/managed/chromium.json`        |
+
+Existing policies are loaded; otherwise the recommended Chromium policies are selected. Press `5` again on the tab to switch browsers. After applying, check `<browser>://policy` to confirm the browser picked them up.
 
 ## Quick Start
 

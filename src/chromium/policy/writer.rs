@@ -17,7 +17,7 @@ use super::macos as platform;
 use super::unsupported as platform;
 #[cfg(target_os = "windows")]
 use super::windows as platform;
-use super::{PolicyLocation, PolicySet};
+use super::{PolicyLocation, PolicySet, PolicyTarget};
 use crate::chromium::Browser;
 
 pub type PolicyWriteResult = Result<PolicyWrite, PolicyWriteError>;
@@ -28,12 +28,12 @@ pub struct PolicyWrite {
     pub policy_count: usize,
 }
 
-pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
-    platform::write(browser, policies)
+pub fn write(target: &PolicyTarget, policies: &PolicySet) -> PolicyWriteResult {
+    platform::write(target, policies)
 }
 
-pub fn export(browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
-    platform::export(browser, policies, path)
+pub fn export(target: &PolicyTarget, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
+    platform::export(target, policies, path)
 }
 
 pub fn export_file_name(browser: Browser) -> String {
@@ -46,12 +46,12 @@ pub fn export_file_name(browser: Browser) -> String {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn uninstall(browser: Browser) -> PolicyWriteResult {
-    platform::uninstall(browser)
+pub fn uninstall(target: &PolicyTarget) -> PolicyWriteResult {
+    platform::uninstall(target)
 }
 
-pub fn managed_location(browser: Browser) -> PolicyLocation {
-    platform::managed_location(browser)
+pub fn managed_location(target: &PolicyTarget) -> PolicyLocation {
+    platform::managed_location(target)
 }
 
 pub(super) fn write_file_atomically(path: &Path, contents: &[u8]) -> Result<(), PolicyWriteError> {

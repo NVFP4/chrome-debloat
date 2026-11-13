@@ -2,6 +2,7 @@ mod errors;
 #[allow(clippy::module_inception)] // Domain policy types live in policy.rs inside this module.
 mod policy;
 mod reader;
+mod target;
 #[allow(dead_code)] // Writer API is exposed before the TUI starts calling it.
 mod writer;
 
@@ -20,6 +21,7 @@ mod windows;
 pub use errors::{PolicyReadError, PolicyWriteError};
 pub use policy::{BrowserPolicy, PolicyLocation, PolicySet, PolicyValue};
 pub use reader::{PolicyReadResult, read};
+pub use target::{CustomBrowserId, PolicyTarget};
 #[cfg(not(target_os = "macos"))]
 pub use writer::uninstall;
 pub use writer::{PolicyWrite, export, export_file_name, managed_location, write};

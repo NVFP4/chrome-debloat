@@ -274,6 +274,7 @@ fn parse_browser(value: &str) -> Result<Browser, ManifestError> {
         "chrome" => Ok(Browser::Chrome),
         "edge" => Ok(Browser::Edge),
         "yandex" => Ok(Browser::Yandex),
+        "chromium" => Ok(Browser::Chromium),
         _ => Err(ManifestError::Invalid(format!(
             "unknown browser target '{value}'"
         ))),

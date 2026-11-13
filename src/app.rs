@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::browser::{ApplyResult, BrowserState, UninstallResult};
+use crate::chromium::policy::{CustomBrowserId, PolicyTarget};
 use crate::chromium::{Browser, detection, policy};
 use crate::editor::{
     NewPolicyType,
@@ -64,6 +65,8 @@ pub struct TuiState {
     policy_editor: Option<PolicyEditorState>,
     policy_key_editor: Option<PolicyKeyEditorState>,
     filter: FilterState,
+    /// Tab to return to when the identifier dialog is cancelled before Any Chromium has one.
+    tab_before_identify: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -85,6 +88,8 @@ pub struct DialogState {
     pub export_path: Option<PathBuf>,
     pub focused_button: usize,
     pub scroll: u16,
+    /// Text typed into dialogs that take input.
+    pub input: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +100,7 @@ pub enum DialogKind {
     ConfirmQuit,
     ConfirmUninstall,
     ConfirmRevert,
+    IdentifyBrowser,
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     ElevatedPermissionsRequired,
 }
@@ -102,16 +108,28 @@ pub enum DialogKind {
 impl App {
     pub fn new() -> Result<Self> {
         let manifest = Manifest::load()?;
-        let mut browsers = Browser::all().map(|browser| {
-            BrowserState::new(
-                browser,
-                detection::detect(browser),
-                policy::read(browser),
-                &manifest,
-                manifest.balanced_preset(browser),
+        let mut browsers = Browser::all().map(|browser| match PolicyTarget::builtin(browser) {
+            Some(target) => {
+                let policy = policy::read(&target);
+                BrowserState::new(
+                    target,
+                    detection::detect(browser),
+                    policy,
+                    &manifest,
+                    manifest.balanced_preset(browser),
+                )
+            }
+            None => BrowserState::unidentified(browser, &manifest),
+        });
+        // Any Chromium stays the last tab so its number is stable.
+        browsers.sort_by_key(|b| {
+            (
+                b.browser == Browser::Chromium,
+                !b.detected(),
+                !b.has_policy(),
+                b.browser.name(),
             )
         });
-        browsers.sort_by_key(|b| (!b.detected(), !b.has_policy(), b.browser.name()));
         #[cfg(any(target_os = "linux", target_os = "windows"))]
         let system_policy_requires_elevation = system_policy_requires_elevation();
 
@@ -305,8 +323,15 @@ impl App {
     }
 
     #[cfg(target_os = "windows")]
-    pub(crate) const fn input_active(&self) -> bool {
-        self.editing_policy() || self.filter_input_active()
+    pub(crate) fn input_active(&self) -> bool {
+        self.editing_policy() || self.filter_input_active() || self.dialog_input_active()
+    }
+
+    fn dialog_input_active(&self) -> bool {
+        self.tui
+            .dialog
+            .as_ref()
+            .is_some_and(|dialog| dialog.kind == DialogKind::IdentifyBrowser)
     }
 
     pub(crate) const fn policy_input_mode(&self) -> Option<PolicyInputMode> {
@@ -376,6 +401,8 @@ impl App {
             Action::ConfirmQuit => self.confirm_quit(),
             Action::ConfirmRevert => self.confirm_revert(),
             Action::ConfirmUninstall => self.confirm_uninstall(),
+            Action::BackspaceDialogInput => self.backspace_dialog_input(),
+            Action::InputDialog(character) => self.input_dialog(character),
             Action::InputFilter(character) => self.input_filter(character),
             Action::InputPolicyEdit(character) => self.input_policy_edit(character),
             Action::LocateExportFile => self.locate_export_file(),
@@ -415,8 +442,14 @@ impl App {
 
     fn select_browser_at(&mut self, index: BrowserTabIndex) -> bool {
         let index = index.get();
-        if index >= self.browsers.len() {
+        let Some(state) = self.browsers.get(index) else {
             return false;
+        };
+        // Any Chromium asks for its identifier until it has one, and again when re-selected.
+        if state.browser == Browser::Chromium
+            && (state.target().is_none() || index == self.active_browser_index)
+        {
+            return self.open_identify_dialog();
         }
 
         let previous_index = self.active_browser_index;
@@ -451,6 +484,12 @@ impl App {
         let changed = self.tui.dialog.is_some();
 
         self.tui.dialog = None;
+        if let Some(index) = self.tui.tab_before_identify.take()
+            && self.active_browser_state().target().is_none()
+        {
+            self.active_browser_index = index;
+            self.move_policy_cursor_to_start();
+        }
 
         changed
     }
@@ -622,6 +661,13 @@ impl App {
     }
 
     fn paste(&mut self, text: String) -> bool {
+        if self.dialog_input_active() {
+            let mut changed = false;
+            for character in text.chars() {
+                changed |= self.input_dialog(character);
+            }
+            return changed;
+        }
         if self.tui.filter.editing {
             return self.paste_filter(&text);
         }
@@ -1021,6 +1067,7 @@ impl App {
             (DialogKind::ConfirmQuit, 0) => self.confirm_quit(),
             (DialogKind::ConfirmUninstall, 0) => self.confirm_uninstall(),
             (DialogKind::ConfirmRevert, 0) => self.confirm_revert(),
+            (DialogKind::IdentifyBrowser, 0) => self.confirm_identify_browser(),
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             (DialogKind::ElevatedPermissionsRequired, 0) => self.close_dialog(),
             (_, _) => self.close_dialog(),
@@ -1075,6 +1122,7 @@ impl App {
                 self.active_browser_state().is_dirty()
             }
             DialogKind::ConfirmUninstall => self.active_browser_state().managed_policy_exists(),
+            DialogKind::IdentifyBrowser => true,
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             DialogKind::ElevatedPermissionsRequired => false,
         }
@@ -1103,6 +1151,7 @@ impl App {
             export_path,
             focused_button: 0,
             scroll: 0,
+            input: String::new(),
         });
         true
     }
@@ -1184,6 +1233,7 @@ impl App {
             export_path: None,
             focused_button: 0,
             scroll: 0,
+            input: String::new(),
         });
         true
     }
@@ -1295,6 +1345,111 @@ impl App {
         }
     }
 
+    fn open_identify_dialog(&mut self) -> bool {
+        let input = self
+            .browsers
+            .iter()
+            .find(|state| state.browser == Browser::Chromium)
+            .and_then(BrowserState::target)
+            .and_then(PolicyTarget::custom_id)
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        // Show the empty Any Chromium tab, not another browser's list, behind the dialog.
+        if let Some(index) = self
+            .browsers
+            .iter()
+            .position(|state| state.browser == Browser::Chromium)
+            .filter(|index| *index != self.active_browser_index)
+        {
+            self.tui.tab_before_identify = Some(self.active_browser_index);
+            self.active_browser_index = index;
+            self.move_policy_cursor_to_start();
+        }
+        self.open_dialog(DialogKind::IdentifyBrowser);
+        if let Some(dialog) = &mut self.tui.dialog {
+            dialog.input = input;
+        }
+
+        true
+    }
+
+    fn input_dialog(&mut self, character: char) -> bool {
+        if character.is_control() || !self.dialog_input_active() {
+            return false;
+        }
+        let Some(dialog) = &mut self.tui.dialog else {
+            return false;
+        };
+
+        dialog.input.push(character);
+        dialog.status = None;
+        true
+    }
+
+    fn backspace_dialog_input(&mut self) -> bool {
+        if !self.dialog_input_active() {
+            return false;
+        }
+        let Some(dialog) = &mut self.tui.dialog else {
+            return false;
+        };
+
+        let changed = dialog.input.pop().is_some() || dialog.status.is_some();
+        dialog.status = None;
+        changed
+    }
+
+    /// Loads the identified browser's policies, or the recommended defaults when it has none.
+    fn confirm_identify_browser(&mut self) -> bool {
+        let Some(input) = self
+            .tui
+            .dialog
+            .as_ref()
+            .filter(|dialog| dialog.kind == DialogKind::IdentifyBrowser)
+            .map(|dialog| dialog.input.as_str())
+        else {
+            return false;
+        };
+        let target = match CustomBrowserId::parse(input) {
+            Ok(id) => PolicyTarget::Custom(id),
+            Err(error) => return self.set_dialog_status(error.to_string()),
+        };
+        let Some(index) = self
+            .browsers
+            .iter()
+            .position(|state| state.browser == Browser::Chromium)
+        else {
+            return false;
+        };
+
+        let state = &self.browsers[index];
+        if state.target() != Some(&target) {
+            if state.has_user_pending_changes() {
+                return self.set_dialog_status("Apply or revert pending changes first.".to_owned());
+            }
+
+            let policy = policy::read(&target);
+            let preset = self.manifest.balanced_preset(Browser::Chromium);
+            self.browsers[index].identify(target, policy, &self.manifest, preset);
+        }
+
+        self.tui.dialog = None;
+        self.tui.tab_before_identify = None;
+        self.active_browser_index = index;
+        self.clear_policy_editors();
+        self.move_policy_cursor_to_start();
+        true
+    }
+
+    fn set_dialog_status(&mut self, status: String) -> bool {
+        let Some(dialog) = &mut self.tui.dialog else {
+            return false;
+        };
+
+        dialog.status = Some(status);
+        true
+    }
+
     fn open_revert_dialog(&mut self) -> bool {
         self.clear_policy_editors();
         self.tui.dialog = Some(DialogState {
@@ -1303,6 +1458,7 @@ impl App {
             export_path: None,
             focused_button: 0,
             scroll: 0,
+            input: String::new(),
         });
         true
     }

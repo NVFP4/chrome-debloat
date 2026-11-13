@@ -1,4 +1,3 @@
-use super::BrowserPolicy;
 use super::errors::PolicyReadError;
 #[cfg(target_os = "linux")]
 use super::linux as platform;
@@ -8,10 +7,10 @@ use super::macos as platform;
 use super::unsupported as platform;
 #[cfg(target_os = "windows")]
 use super::windows as platform;
-use crate::chromium::Browser;
+use super::{BrowserPolicy, PolicyTarget};
 
 pub type PolicyReadResult = Result<Option<BrowserPolicy>, PolicyReadError>;
 
-pub fn read(browser: Browser) -> PolicyReadResult {
-    platform::read(browser)
+pub fn read(target: &PolicyTarget) -> PolicyReadResult {
+    platform::read(target)
 }

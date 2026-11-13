@@ -21,7 +21,9 @@ pub fn detect_browser(browser: Browser) -> BrowserDetectionResult {
 }
 
 fn app_path(browser: Browser) -> Result<Option<PathBuf>, BrowserDetectionError> {
-    let exe_name = browser_exe_name(browser);
+    let Some(exe_name) = browser_exe_name(browser) else {
+        return Ok(None);
+    };
     for root in [LOCAL_MACHINE, CURRENT_USER] {
         if let Some(path) = app_path_registry_value(root, exe_name)? {
             return Ok(Some(PathBuf::from(path)));
@@ -59,12 +61,13 @@ fn app_path_registry_value(
     }
 }
 
-fn browser_exe_name(browser: Browser) -> &'static str {
+fn browser_exe_name(browser: Browser) -> Option<&'static str> {
     match browser {
-        Browser::Brave => "brave.exe",
-        Browser::Chrome => "chrome.exe",
-        Browser::Edge => "msedge.exe",
-        Browser::Yandex => "browser.exe",
+        Browser::Brave => Some("brave.exe"),
+        Browser::Chrome => Some("chrome.exe"),
+        Browser::Edge => Some("msedge.exe"),
+        Browser::Yandex => Some("browser.exe"),
+        Browser::Chromium => None,
     }
 }
 

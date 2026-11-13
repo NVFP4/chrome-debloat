@@ -1,23 +1,40 @@
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use plist::{Dictionary, Value as PlistValue};
 
 use super::errors::{PolicyReadError, PolicyWriteError};
+use super::target::{InvalidCustomBrowserId, validate_segments};
 use super::writer::{PolicyWrite, PolicyWriteResult, write_file_atomically};
-use super::{BrowserPolicy, PolicyLocation, PolicyReadResult, PolicySet, PolicyValue};
-use crate::chromium::Browser;
+use super::{
+    BrowserPolicy,
+    PolicyLocation,
+    PolicyReadResult,
+    PolicySet,
+    PolicyTarget,
+    PolicyValue,
+};
 
 const ROOT_MUST_BE_OBJECT: &str = "root must be a dictionary/object";
+const MANAGED_PREFERENCES: &str = "/Library/Managed Preferences";
+const BUILTIN_IDS: [&str; 4] = [
+    "com.brave.Browser",
+    "com.google.Chrome",
+    "com.microsoft.Edge",
+    "ru.yandex.desktop.yandex-browser",
+];
 
-pub fn read(browser: Browser) -> PolicyReadResult {
-    let path = policy_path(browser);
+pub(super) const CUSTOM_ID_HINT: &str = "Bundle ID of the browser app, e.g. org.chromium.Chromium";
+
+pub fn read(target: &PolicyTarget) -> PolicyReadResult {
+    let path = policy_path(target);
     let source = PolicyLocation::File(path.clone());
-    read_policy(browser, path, source)
+    read_policy(target, path, source)
 }
 
-pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
-    let path = default_mobileconfig_path(browser);
-    let contents = mobileconfig_bytes(browser, policies)?;
+pub fn write(target: &PolicyTarget, policies: &PolicySet) -> PolicyWriteResult {
+    let path = default_mobileconfig_path(target);
+    let contents = mobileconfig_bytes(target, policies)?;
     write_file_atomically(&path, &contents)?;
 
     Ok(PolicyWrite {
@@ -26,8 +43,8 @@ pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
     })
 }
 
-pub fn export(browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
-    let contents = mobileconfig_bytes(browser, policies)?;
+pub fn export(target: &PolicyTarget, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
+    let contents = mobileconfig_bytes(target, policies)?;
     write_file_atomically(path, &contents)?;
 
     Ok(PolicyWrite {
@@ -40,11 +57,32 @@ pub fn export_file_extension() -> &'static str {
     "mobileconfig"
 }
 
-pub fn managed_location(browser: Browser) -> PolicyLocation {
-    PolicyLocation::File(policy_path(browser))
+pub fn managed_location(target: &PolicyTarget) -> PolicyLocation {
+    PolicyLocation::File(policy_path(target))
 }
 
-fn read_policy(browser: Browser, path: PathBuf, source: PolicyLocation) -> PolicyReadResult {
+pub(super) fn validate_custom_id(id: &str) -> Result<(), InvalidCustomBrowserId> {
+    validate_segments(id, '.', |character| {
+        character.is_ascii_alphanumeric() || character == '-'
+    })?;
+    if !id.contains('.') {
+        return Err(InvalidCustomBrowserId(
+            "bundle ID needs at least two parts, e.g. org.chromium.Chromium",
+        ));
+    }
+    if BUILTIN_IDS
+        .iter()
+        .any(|builtin| builtin.eq_ignore_ascii_case(id))
+    {
+        return Err(InvalidCustomBrowserId(
+            "use the browser's own tab for this bundle ID",
+        ));
+    }
+
+    Ok(())
+}
+
+fn read_policy(target: &PolicyTarget, path: PathBuf, source: PolicyLocation) -> PolicyReadResult {
     match path.try_exists() {
         Ok(false) => return Ok(None),
         Ok(true) => {}
@@ -58,7 +96,7 @@ fn read_policy(browser: Browser, path: PathBuf, source: PolicyLocation) -> Polic
 
     read_plist_policy(&path).map(|policies| {
         Some(BrowserPolicy {
-            browser,
+            browser: target.browser(),
             source,
             policies,
         })
@@ -125,13 +163,16 @@ fn read_value(value: PlistValue) -> PolicyValue {
     }
 }
 
-fn mobileconfig_bytes(browser: Browser, policies: &PolicySet) -> Result<Vec<u8>, PolicyWriteError> {
-    let metadata = mobileconfig_metadata(browser);
+fn mobileconfig_bytes(
+    target: &PolicyTarget,
+    policies: &PolicySet,
+) -> Result<Vec<u8>, PolicyWriteError> {
+    let metadata = mobileconfig_metadata(target);
     let mut payload = Dictionary::new();
 
-    insert_string(&mut payload, "PayloadIdentifier", metadata.identifier);
-    insert_string(&mut payload, "PayloadType", metadata.identifier);
-    insert_string(&mut payload, "PayloadUUID", metadata.content_uuid);
+    insert_string(&mut payload, "PayloadIdentifier", &metadata.identifier);
+    insert_string(&mut payload, "PayloadType", &metadata.identifier);
+    insert_string(&mut payload, "PayloadUUID", &metadata.content_uuid);
     insert_integer(&mut payload, "PayloadVersion", 1);
     payload.insert("PayloadEnabled".to_owned(), PlistValue::Boolean(true));
 
@@ -147,10 +188,10 @@ fn mobileconfig_bytes(browser: Browser, policies: &PolicySet) -> Result<Vec<u8>,
         "PayloadRemovalDisallowed".to_owned(),
         PlistValue::Boolean(false),
     );
-    insert_string(&mut root, "PayloadUUID", metadata.payload_uuid);
-    insert_string(&mut root, "PayloadDisplayName", metadata.display_name);
-    insert_string(&mut root, "PayloadDescription", metadata.description);
-    insert_string(&mut root, "PayloadIdentifier", metadata.identifier);
+    insert_string(&mut root, "PayloadUUID", &metadata.payload_uuid);
+    insert_string(&mut root, "PayloadDisplayName", &metadata.display_name);
+    insert_string(&mut root, "PayloadDescription", &metadata.description);
+    insert_string(&mut root, "PayloadIdentifier", &metadata.identifier);
     root.insert(
         "PayloadContent".to_owned(),
         PlistValue::Array(vec![PlistValue::Dictionary(payload)]),
@@ -199,71 +240,116 @@ fn insert_integer(dictionary: &mut Dictionary, key: &str, value: i64) {
 }
 
 struct MobileConfigMetadata {
-    display_name: &'static str,
-    description: &'static str,
-    identifier: &'static str,
-    payload_uuid: &'static str,
-    content_uuid: &'static str,
+    display_name: Cow<'static, str>,
+    description: Cow<'static, str>,
+    identifier: Cow<'static, str>,
+    payload_uuid: Cow<'static, str>,
+    content_uuid: Cow<'static, str>,
 }
 
-fn mobileconfig_metadata(browser: Browser) -> MobileConfigMetadata {
-    match browser {
-        Browser::Brave => MobileConfigMetadata {
-            display_name: "Brave Policies",
-            description: "Brave Browser system-level policies",
-            identifier: "com.brave.Browser",
-            payload_uuid: "e143b891-3398-48f9-bee1-54d3b6db44b3",
-            content_uuid: "88032831-5301-41ad-8231-10efa9d67ab3",
-        },
-        Browser::Chrome => MobileConfigMetadata {
-            display_name: "Google Chrome Policies",
-            description: "Google Chrome Browser system-level policies",
-            identifier: "com.google.Chrome",
-            payload_uuid: "8568e67e-21ba-4bdc-a944-a30fb301ba02",
-            content_uuid: "3eb9eb1f-412c-4f8b-b425-f95f1a67072d",
-        },
-        Browser::Edge => MobileConfigMetadata {
-            display_name: "Microsoft Edge Policies",
-            description: "Microsoft Edge Browser system-level policies",
-            identifier: "com.microsoft.Edge",
-            payload_uuid: "778fb3c3-2e58-4337-86dc-1a8044793d2d",
-            content_uuid: "65ffbe44-b556-4c33-88ea-ab684dab69bc",
-        },
-        Browser::Yandex => MobileConfigMetadata {
-            display_name: "Yandex Browser Policies",
-            description: "Yandex Browser system-level policies",
-            identifier: "ru.yandex.desktop.yandex-browser",
-            payload_uuid: "61496cb6-d284-4a04-805e-b5334f887b39",
-            content_uuid: "395e405c-5300-45f7-a770-61bdb3f94165",
+fn mobileconfig_metadata(target: &PolicyTarget) -> MobileConfigMetadata {
+    match target {
+        PolicyTarget::Brave => MobileConfigMetadata::builtin(
+            "Brave Policies",
+            "Brave Browser system-level policies",
+            "com.brave.Browser",
+            "e143b891-3398-48f9-bee1-54d3b6db44b3",
+            "88032831-5301-41ad-8231-10efa9d67ab3",
+        ),
+        PolicyTarget::Chrome => MobileConfigMetadata::builtin(
+            "Google Chrome Policies",
+            "Google Chrome Browser system-level policies",
+            "com.google.Chrome",
+            "8568e67e-21ba-4bdc-a944-a30fb301ba02",
+            "3eb9eb1f-412c-4f8b-b425-f95f1a67072d",
+        ),
+        PolicyTarget::Edge => MobileConfigMetadata::builtin(
+            "Microsoft Edge Policies",
+            "Microsoft Edge Browser system-level policies",
+            "com.microsoft.Edge",
+            "778fb3c3-2e58-4337-86dc-1a8044793d2d",
+            "65ffbe44-b556-4c33-88ea-ab684dab69bc",
+        ),
+        PolicyTarget::Yandex => MobileConfigMetadata::builtin(
+            "Yandex Browser Policies",
+            "Yandex Browser system-level policies",
+            "ru.yandex.desktop.yandex-browser",
+            "61496cb6-d284-4a04-805e-b5334f887b39",
+            "395e405c-5300-45f7-a770-61bdb3f94165",
+        ),
+        PolicyTarget::Custom(id) => MobileConfigMetadata {
+            display_name: Cow::Owned(format!("{id} Policies")),
+            description: Cow::Owned(format!("{id} system-level policies")),
+            identifier: Cow::Owned(id.as_str().to_owned()),
+            payload_uuid: Cow::Owned(stable_uuid(id.as_str(), "payload")),
+            content_uuid: Cow::Owned(stable_uuid(id.as_str(), "content")),
         },
     }
 }
 
-fn default_mobileconfig_path(browser: Browser) -> PathBuf {
+impl MobileConfigMetadata {
+    const fn builtin(
+        display_name: &'static str,
+        description: &'static str,
+        identifier: &'static str,
+        payload_uuid: &'static str,
+        content_uuid: &'static str,
+    ) -> Self {
+        Self {
+            display_name: Cow::Borrowed(display_name),
+            description: Cow::Borrowed(description),
+            identifier: Cow::Borrowed(identifier),
+            payload_uuid: Cow::Borrowed(payload_uuid),
+            content_uuid: Cow::Borrowed(content_uuid),
+        }
+    }
+}
+
+/// A UUID derived from `id` and `salt`, so re-exporting a profile for the same bundle ID replaces
+/// the installed one instead of adding a second profile.
+fn stable_uuid(id: &str, salt: &str) -> String {
+    let high = fnv1a64(0xcbf2_9ce4_8422_2325, [salt, id]);
+    let low = fnv1a64(high, [id, salt]);
+    // RFC 9562 version 8 (custom) with the RFC variant bits.
+    let high = (high & !0xf000) | 0x8000;
+    let low = (low & !(0b11 << 62)) | (0b10 << 62);
+
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        high >> 32,
+        (high >> 16) & 0xffff,
+        high & 0xffff,
+        low >> 48,
+        low & 0xffff_ffff_ffff,
+    )
+}
+
+fn fnv1a64<const N: usize>(seed: u64, parts: [&str; N]) -> u64 {
+    parts
+        .iter()
+        .flat_map(|part| part.bytes())
+        .fold(seed, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+        })
+}
+
+fn default_mobileconfig_path(target: &PolicyTarget) -> PathBuf {
     std::env::temp_dir().join(format!(
         "chrome-debloat-{}.mobileconfig",
-        browser_slug(browser)
+        target.browser().slug()
     ))
 }
 
-fn browser_slug(browser: Browser) -> &'static str {
-    match browser {
-        Browser::Brave => "brave",
-        Browser::Chrome => "chrome",
-        Browser::Edge => "edge",
-        Browser::Yandex => "yandex",
-    }
-}
+fn policy_path(target: &PolicyTarget) -> PathBuf {
+    let id = match target {
+        PolicyTarget::Brave => "com.brave.Browser",
+        PolicyTarget::Chrome => "com.google.Chrome",
+        PolicyTarget::Edge => "com.microsoft.Edge",
+        PolicyTarget::Yandex => "ru.yandex.desktop.yandex-browser",
+        PolicyTarget::Custom(id) => id.as_str(),
+    };
 
-fn policy_path(browser: Browser) -> PathBuf {
-    match browser {
-        Browser::Brave => PathBuf::from("/Library/Managed Preferences/com.brave.Browser.plist"),
-        Browser::Chrome => PathBuf::from("/Library/Managed Preferences/com.google.Chrome.plist"),
-        Browser::Edge => PathBuf::from("/Library/Managed Preferences/com.microsoft.Edge.plist"),
-        Browser::Yandex => {
-            PathBuf::from("/Library/Managed Preferences/ru.yandex.desktop.yandex-browser.plist")
-        }
-    }
+    Path::new(MANAGED_PREFERENCES).join(format!("{id}.plist"))
 }
 
 #[cfg(test)]
@@ -281,7 +367,7 @@ mod tests {
             PolicyValue::List(vec![string("abc;https://example.com/update.xml")]),
         );
 
-        let bytes = mobileconfig_bytes(Browser::Chrome, &policies)?;
+        let bytes = mobileconfig_bytes(&PolicyTarget::Chrome, &policies)?;
         let profile = PlistValue::from_reader(Cursor::new(bytes))?;
         let root = profile
             .as_dictionary()
@@ -325,13 +411,29 @@ mod tests {
         let mut policies = PolicySet::new();
         policies.insert("HomepageLocation".to_owned(), PolicyValue::Null);
 
-        let result = mobileconfig_bytes(Browser::Chrome, &policies);
+        let result = mobileconfig_bytes(&PolicyTarget::Chrome, &policies);
 
         assert!(matches!(
             result,
             Err(PolicyWriteError::UnsupportedValue { policy, .. })
                 if policy == "HomepageLocation"
         ));
+    }
+
+    #[test]
+    fn custom_ids_must_be_bundle_ids_of_unknown_browsers() {
+        assert!(validate_custom_id("org.chromium.Chromium").is_ok());
+        assert!(validate_custom_id("Chromium").is_err());
+        assert!(validate_custom_id("com.google.chrome").is_err());
+    }
+
+    #[test]
+    fn custom_profile_uuids_are_stable_per_bundle_id() {
+        let first = stable_uuid("org.chromium.Chromium", "payload");
+
+        assert_eq!(first, stable_uuid("org.chromium.Chromium", "payload"));
+        assert_ne!(first, stable_uuid("org.chromium.Chromium", "content"));
+        assert_ne!(first, stable_uuid("com.vivaldi.Vivaldi", "payload"));
     }
 
     fn string(value: &str) -> PolicyValue {

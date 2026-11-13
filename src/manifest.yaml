@@ -1,7 +1,7 @@
 policyGroups:
   chromiumExt:
     label: Extensions
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     settings:
       ExtensionInstallForcelist: []
   braveTelemetry:
@@ -182,7 +182,7 @@ policyGroups:
       LiveTranslationAllowed: false
   chromiumTelemetry:
     label: Chromium Telemetry
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     settings:
       UserSecurityAuthenticatedReporting: false
       UserSecuritySignalsReporting: false
@@ -196,7 +196,7 @@ policyGroups:
       WebRtcTextLogCollectionAllowed: false
   chromiumGenAI:
     label: Chromium Generative AI
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     settings:
       AIModeSettings: 1
       AutofillGenAiSettings: 2
@@ -220,7 +220,7 @@ policyGroups:
       BuiltInAIAPIsEnabled: false
   chromiumSiteShield:
     label: Chromium Site-Shield
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     settings:
       DefaultGeolocationSetting: 2
       DefaultLocalFontsSetting: 2
@@ -230,7 +230,7 @@ policyGroups:
       - ""
   chromiumSiteShieldSensors:
     label: Chromium Site-Shield Sensors & Devices
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     settings:
       DefaultSensorsSetting: 2
       DefaultSerialGuardSetting: 2
@@ -239,21 +239,21 @@ policyGroups:
       DefaultWebUsbGuardSetting: 2
   chromiumSignInSync:
     label: Chromium Sign-in and Sync
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     settings:
       BrowserSignin: 0
       SyncDisabled: true
       SigninInterceptionEnabled: false
   chromiumPassword:
     label: Chromium Password Manager
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     settings:
       PasswordManagerEnabled: true
       PasswordManagerPasskeysEnabled: true
       PasswordSharingEnabled: false
   chromiumMisc:
     label: Chromium Miscellaneous
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     settings:
       # Network
       BuiltInDnsClientEnabled: false
@@ -276,7 +276,7 @@ policyGroups:
       PromotionsEnabled: false
   chromiumObsolete:
     label: Chromium Obsolete (Safe To Remove)
-    targets: [ chrome, brave, edge ]
+    targets: [ chrome, brave, edge, chromium ]
     visibility: onlyApplied
     settings:
       # ChromeOS only
@@ -385,11 +385,11 @@ extensions:
   ublockLite:
     name: uBlock Origin Lite
     id: ddkjiahejlhfcafbddmgiahcphecmpfh
-    targets: [ chrome, brave, yandex ]
+    targets: [ chrome, brave, yandex, chromium ]
   isdcac:
     name: I still don't care about cookies
     id: edibdbjcniadpccecjdfdjjppcpchdlm
-    targets: [ chrome, brave, yandex ]
+    targets: [ chrome, brave, yandex, chromium ]
   cad:
     name: Cookie AutoDelete
     id: fhcgjolkccmbidfldomjliifgaodjagh
@@ -426,6 +426,17 @@ presets:
       - ublockLite
       - isdcac
   chrome:
+    balanced:
+      policyGroups:
+      - chromiumTelemetry
+      - chromiumGenAI
+      - chromiumSiteShield
+      - chromiumSignInSync
+      - chromiumMisc
+      extensions:
+      - ublockLite
+      - isdcac
+  chromium:
     balanced:
       policyGroups:
       - chromiumTelemetry

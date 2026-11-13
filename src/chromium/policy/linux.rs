@@ -3,18 +3,21 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use super::errors::{PolicyReadError, PolicyWriteError};
+use super::target::{InvalidCustomBrowserId, validate_segments};
 use super::writer::{PolicyWrite, PolicyWriteResult, write_file_atomically};
-use super::{BrowserPolicy, PolicyLocation, PolicyReadResult, PolicySet, json};
-use crate::chromium::Browser;
+use super::{BrowserPolicy, PolicyLocation, PolicyReadResult, PolicySet, PolicyTarget, json};
 
-pub fn read(browser: Browser) -> PolicyReadResult {
-    let path = policy_path(browser);
+pub(super) const CUSTOM_ID_HINT: &str = "Directory under /etc holding policies/managed, e.g. chromium for /etc/chromium/policies/managed";
+const BUILTIN_IDS: [&str; 4] = ["brave", "opt/chrome", "opt/edge", "opt/yandex/browser"];
+
+pub fn read(target: &PolicyTarget) -> PolicyReadResult {
+    let path = policy_path(target);
     let source = PolicyLocation::File(path.clone());
-    read_policy(browser, path, source)
+    read_policy(target, path, source)
 }
 
-pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
-    let path = policy_path(browser);
+pub fn write(target: &PolicyTarget, policies: &PolicySet) -> PolicyWriteResult {
+    let path = policy_path(target);
     let contents = json::policy_set_to_bytes(policies)?;
     write_file_atomically(&path, &contents)?;
 
@@ -24,7 +27,7 @@ pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
     })
 }
 
-pub fn export(_browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
+pub fn export(_target: &PolicyTarget, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
     let contents = json::policy_set_to_bytes(policies)?;
     write_file_atomically(path, &contents)?;
 
@@ -34,8 +37,8 @@ pub fn export(_browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWri
     })
 }
 
-pub fn uninstall(browser: Browser) -> PolicyWriteResult {
-    let path = policy_path(browser);
+pub fn uninstall(target: &PolicyTarget) -> PolicyWriteResult {
+    let path = policy_path(target);
     match fs::remove_file(&path) {
         Ok(()) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => {}
@@ -57,11 +60,24 @@ pub fn export_file_extension() -> &'static str {
     "json"
 }
 
-pub fn managed_location(browser: Browser) -> PolicyLocation {
-    PolicyLocation::File(policy_path(browser))
+pub fn managed_location(target: &PolicyTarget) -> PolicyLocation {
+    PolicyLocation::File(policy_path(target))
 }
 
-fn read_policy(browser: Browser, path: PathBuf, source: PolicyLocation) -> PolicyReadResult {
+pub(super) fn validate_custom_id(id: &str) -> Result<(), InvalidCustomBrowserId> {
+    validate_segments(id, '/', |character| {
+        character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+    })?;
+    if BUILTIN_IDS.contains(&id) {
+        return Err(InvalidCustomBrowserId(
+            "use the browser's own tab for this identifier",
+        ));
+    }
+
+    Ok(())
+}
+
+fn read_policy(target: &PolicyTarget, path: PathBuf, source: PolicyLocation) -> PolicyReadResult {
     match path.try_exists() {
         Ok(false) => return Ok(None),
         Ok(true) => {}
@@ -75,18 +91,49 @@ fn read_policy(browser: Browser, path: PathBuf, source: PolicyLocation) -> Polic
 
     json::policy_set_from_file(&path).map(|policies| {
         Some(BrowserPolicy {
-            browser,
+            browser: target.browser(),
             source,
             policies,
         })
     })
 }
 
-fn policy_path(browser: Browser) -> PathBuf {
-    match browser {
-        Browser::Brave => PathBuf::from("/etc/brave/policies/managed/brave.json"),
-        Browser::Chrome => PathBuf::from("/etc/opt/chrome/policies/managed/chrome.json"),
-        Browser::Edge => PathBuf::from("/etc/opt/edge/policies/managed/edge.json"),
-        Browser::Yandex => PathBuf::from("/etc/opt/yandex/browser/policies/managed/yandex.json"),
+fn policy_path(target: &PolicyTarget) -> PathBuf {
+    match target {
+        PolicyTarget::Brave => PathBuf::from("/etc/brave/policies/managed/brave.json"),
+        PolicyTarget::Chrome => PathBuf::from("/etc/opt/chrome/policies/managed/chrome.json"),
+        PolicyTarget::Edge => PathBuf::from("/etc/opt/edge/policies/managed/edge.json"),
+        PolicyTarget::Yandex => {
+            PathBuf::from("/etc/opt/yandex/browser/policies/managed/yandex.json")
+        }
+        PolicyTarget::Custom(id) => {
+            let id = id.as_str();
+            let file_name = id.rsplit('/').next().unwrap_or(id);
+            Path::new("/etc")
+                .join(id)
+                .join("policies")
+                .join("managed")
+                .join(format!("{file_name}.json"))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chromium::policy::CustomBrowserId;
+
+    #[test]
+    fn custom_ids_map_to_their_managed_policy_directory() -> Result<(), InvalidCustomBrowserId> {
+        let target = PolicyTarget::Custom(CustomBrowserId::parse("opt/vivaldi")?);
+
+        assert_eq!(
+            policy_path(&target),
+            PathBuf::from("/etc/opt/vivaldi/policies/managed/vivaldi.json")
+        );
+        assert!(CustomBrowserId::parse("/etc/chromium").is_err());
+        assert!(CustomBrowserId::parse("opt/chrome").is_err());
+
+        Ok(())
     }
 }
