@@ -209,6 +209,9 @@ impl PolicyTree {
         push_custom_rows(&mut rows, context, stage);
         for group in manifest.policy_groups(browser) {
             let group_id = PolicyGroupId::manifest(&group.id);
+            if stage.rows(&group_id).next().is_none() {
+                continue;
+            }
             rows.push(PolicyTreeRow::group(
                 group.name.clone(),
                 group_status(stage.rows(&group_id)),
@@ -1572,6 +1575,45 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("deleted list item should be visible"))?;
 
         assert!(editable_value_at(&stage, &deleted).is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn applied_visibility_group_lists_only_current_policies() -> anyhow::Result<()> {
+        let manifest = Manifest::from_yaml(
+            "policyGroups:
+  obsolete:
+    label: Obsolete
+    targets: [ chrome ]
+    visibility: onlyApplied
+    settings:
+      Gone: false
+      Kept: false
+",
+        )?;
+        let browser = Browser::Chrome;
+        let group = RowTarget::Group(PolicyGroupId::manifest("obsolete"));
+        let policy_keys = |tree: &PolicyTree| {
+            tree.rows
+                .iter()
+                .filter_map(|row| match &row.kind {
+                    PolicyTreeRowKind::Policy { key, .. } => Some(key.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let stage = PolicyStage::new(&manifest, browser, &PolicySet::new());
+        let tree = PolicyTree::build(&manifest, browser, &stage, None);
+        assert!(tree.rows.iter().all(|row| row.target() != &group));
+
+        let mut baseline = PolicySet::new();
+        baseline.insert("Kept".to_owned(), PolicyValue::Bool(false));
+        let stage = PolicyStage::new(&manifest, browser, &baseline);
+        let tree = PolicyTree::build(&manifest, browser, &stage, None);
+        assert!(tree.rows.iter().any(|row| row.target() == &group));
+        assert_eq!(policy_keys(&tree), ["Kept"]);
 
         Ok(())
     }
