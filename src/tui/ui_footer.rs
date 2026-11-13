@@ -8,7 +8,7 @@ use super::styles;
 use super::ui_text::{blank, join_lines};
 use crate::app::App;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("APP_VERSION");
 const REPORT_ISSUE: &str = "report issue";
 const INPUT_FOOTER: Style = Style::new().bg(Color::Cyan);
 const INPUT_TEXT: Style = Style::new().fg(Color::Black).bold();

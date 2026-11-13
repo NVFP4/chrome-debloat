@@ -1,5 +1,6 @@
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::{env, fs};
 
 use flate2::Compression;
@@ -7,6 +8,7 @@ use flate2::write::GzEncoder;
 
 fn main() -> io::Result<()> {
     println!("cargo:rerun-if-changed=src/manifest.yaml");
+    println!("cargo:rustc-env=APP_VERSION={}", app_version()?);
 
     let manifest = fs::read("src/manifest.yaml")?;
     validate_manifest(&manifest)?;
@@ -19,6 +21,59 @@ fn main() -> io::Result<()> {
         .map(PathBuf::from)
         .ok_or_else(|| io::Error::other("OUT_DIR is not set"))?;
     fs::write(out_dir.join("manifest.yaml.gz"), compressed)
+}
+
+/// `X.Y.Z` for release builds, else `X.Y.(Z+1)-dev+<hash>`.
+fn app_version() -> io::Result<String> {
+    println!("cargo:rerun-if-env-changed=APP_RELEASE");
+    let package_version = env!("CARGO_PKG_VERSION");
+    if env::var_os("APP_RELEASE").is_some() {
+        return Ok(package_version.to_owned());
+    }
+
+    watch_git_head();
+    let Some(hash) = git(&["rev-parse", "--short=7", "HEAD"]) else {
+        return Ok(package_version.to_owned());
+    };
+
+    let patch: u64 = env!("CARGO_PKG_VERSION_PATCH")
+        .parse()
+        .map_err(|_| io::Error::other("package patch version is not a number"))?;
+    Ok(format!(
+        "{}.{}.{}-dev+{hash}",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        env!("CARGO_PKG_VERSION_MINOR"),
+        patch + 1
+    ))
+}
+
+fn watch_git_head() {
+    let head_ref = git(&["symbolic-ref", "-q", "HEAD"]);
+    let watched = ["HEAD", "packed-refs"]
+        .into_iter()
+        .chain(head_ref.as_deref());
+
+    let mut args = vec!["rev-parse"];
+    for path in watched {
+        args.extend(["--git-path", path]);
+    }
+    let Some(resolved) = git(&args) else {
+        return;
+    };
+    // Cargo always reruns for missing paths.
+    for path in resolved.lines().filter(|path| Path::new(path).exists()) {
+        println!("cargo:rerun-if-changed={path}");
+    }
+}
+
+fn git(args: &[&str]) -> Option<String> {
+    let output = Command::new("git").args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8(output.stdout)
+        .ok()
+        .map(|stdout| stdout.trim_end().to_owned())
 }
 
 fn validate_manifest(contents: &[u8]) -> io::Result<()> {
