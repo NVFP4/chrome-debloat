@@ -453,7 +453,7 @@ fn policy_root_path(target: &PolicyTarget) -> Cow<'static, str> {
         PolicyTarget::Chrome => Cow::Borrowed(r"SOFTWARE\Policies\Google\Chrome"),
         PolicyTarget::Edge => Cow::Borrowed(r"SOFTWARE\Policies\Microsoft\Edge"),
         PolicyTarget::Yandex => Cow::Borrowed(r"SOFTWARE\Policies\YandexBrowser"),
-        PolicyTarget::Custom(id) => Cow::Owned(format!(r"{POLICIES_ROOT}\{id}")),
+        PolicyTarget::Custom(id) => Cow::Owned(format!(r"{POLICIES_ROOT}\{}", id.as_str())),
     }
 }
 
