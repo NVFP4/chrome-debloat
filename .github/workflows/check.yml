@@ -1,6 +1,12 @@
 name: Check
 
 on:
+  workflow_call:
+    inputs:
+      skip-binaries:
+        description: Skip building and uploading binaries; only run fmt, clippy, and tests
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'src/**'
@@ -60,12 +66,14 @@ jobs:
         run: cargo +1.100.0 clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Build
+        if: ${{ !inputs.skip-binaries }}
         run: cargo +1.100.0 build --workspace --all-features --release --locked
 
       - name: Test
         run: cargo +1.100.0 test --workspace --all-features
 
       - name: Upload binary
+        if: ${{ !inputs.skip-binaries }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
