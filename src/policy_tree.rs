@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::chromium::Browser;
 use crate::chromium::policy::{PolicySet, PolicyValue};
 use crate::diff::{self, DiffStatus};
-use crate::manifest::{EXTENSION_INSTALL_FORCELIST, Manifest};
+use crate::manifest::{EXTENSION_INSTALL_FORCELIST, GroupVisibility, Manifest, PolicyGroup};
 use crate::policy_stage::{
     PolicyGroupId,
     PolicyItem,
@@ -207,7 +207,13 @@ impl PolicyTree {
         let mut rows = Vec::new();
 
         push_custom_rows(&mut rows, context, stage);
-        for group in manifest.policy_groups(browser) {
+        // Applied leftovers (obsolete policies) come right after Custom so they get noticed.
+        let is_leftover = |group: &&PolicyGroup| group.visibility == GroupVisibility::OnlyApplied;
+        let leftovers = manifest.policy_groups(browser).filter(is_leftover);
+        let regular = manifest
+            .policy_groups(browser)
+            .filter(|group| !is_leftover(group));
+        for group in leftovers.chain(regular) {
             let group_id = PolicyGroupId::manifest(&group.id);
             if stage.rows(&group_id).next().is_none() {
                 continue;
