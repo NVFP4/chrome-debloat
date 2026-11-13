@@ -48,5 +48,6 @@ fn app_bundle_names(browser: Browser) -> &'static [&'static str] {
         Browser::Chrome => &["Google Chrome.app"],
         Browser::Edge => &["Microsoft Edge.app"],
         Browser::Yandex => &["Yandex.app"],
+        Browser::Chromium => &[],
     }
 }

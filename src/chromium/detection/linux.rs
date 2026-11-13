@@ -21,6 +21,7 @@ fn executable_candidates(browser: Browser) -> &'static [&'static str] {
         Browser::Chrome => &["google-chrome", "google-chrome-stable", "chrome"],
         Browser::Edge => &["microsoft-edge", "microsoft-edge-stable", "msedge"],
         Browser::Yandex => &["yandex-browser-stable", "yandex-browser"],
+        Browser::Chromium => &[],
     }
 }
 

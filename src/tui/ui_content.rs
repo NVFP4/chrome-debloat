@@ -6,7 +6,7 @@ use ratatui::widgets::Paragraph;
 
 use super::styles;
 use super::ui_text::render_space_between;
-use crate::app::App;
+use crate::app::{App, DialogKind};
 use crate::browser::BrowserState;
 use crate::editor::{NewPolicyType, PolicyEditorState, PolicyKeyEditorState};
 use crate::policy_tree::{
@@ -108,6 +108,13 @@ pub fn render(frame: &mut Frame<'_>, area: Rect, app: &App) {
 }
 
 fn display_rows(app: &App) -> Vec<DisplayRow> {
+    // The identifier dialog picks which browser to load, so no list sits behind it.
+    if app
+        .dialog()
+        .is_some_and(|dialog| dialog.kind == DialogKind::IdentifyBrowser)
+    {
+        return Vec::new();
+    }
     let state = app.active_browser_state();
 
     match (app.active_policy_tree(), &state.policy_error) {

@@ -11,6 +11,7 @@ use super::{
     ui_footer,
     ui_header,
     ui_help,
+    ui_identify,
     ui_quit,
     ui_revert,
     ui_summary,
@@ -52,6 +53,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
             DialogKind::ConfirmQuit => ui_quit::render(frame, area, app, dialog),
             DialogKind::ConfirmRevert => ui_revert::render(frame, area, app, dialog),
             DialogKind::ConfirmUninstall => ui_uninstall::render(frame, area, app, dialog),
+            DialogKind::IdentifyBrowser => ui_identify::render(frame, area, app, dialog),
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             DialogKind::ElevatedPermissionsRequired => {
                 ui_elevation::render(frame, area, app, dialog)

@@ -7,6 +7,7 @@ use ratatui::widgets::Paragraph;
 use super::styles;
 use crate::app::App;
 use crate::browser::BrowserState;
+use crate::chromium::Browser;
 
 const SUMMARY: Style = styles::GRAY;
 const NOTICE: Style = styles::YELLOW;
@@ -14,6 +15,7 @@ const BROWSER_DETECTION_FAILED: &str = "Browser detection failed, but policy can
 const BROWSER_NOT_INSTALLED: &str = "Browser not installed, but policy can still be applied. Recommended policies have been selected.";
 const POLICY_NOT_FOUND: &str =
     "No policy found on the system. Recommended policies have been selected.";
+const IDENTIFIER_NEEDED: &str = "Enter the browser's identifier to load its policies.";
 
 pub(super) fn height(app: &App, width: u16) -> u16 {
     summary_lines(app.active_browser_state(), width).len() as u16
@@ -49,7 +51,16 @@ fn summary_lines(state: &BrowserState, width: u16) -> Vec<Line<'static>> {
 }
 
 fn missing_policy_lines(state: &BrowserState) -> Vec<Line<'static>> {
-    if let Some(error) = &state.install_error {
+    // Custom browsers are never detected, so say where policies were looked for instead.
+    if state.browser == Browser::Chromium && state.target().is_none() {
+        std::iter::once(Line::styled(IDENTIFIER_NEEDED, NOTICE)).collect()
+    } else if let (Browser::Chromium, Some(policy)) = (state.browser, &state.policy) {
+        let notice = format!(
+            "No policy found at \"{}\". Recommended policies have been selected.",
+            policy.source
+        );
+        std::iter::once(Line::styled(notice, NOTICE)).collect()
+    } else if let Some(error) = &state.install_error {
         [
             Line::styled(BROWSER_DETECTION_FAILED, NOTICE),
             Line::styled(error.clone(), SUMMARY),

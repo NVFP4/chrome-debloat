@@ -1,37 +1,55 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use windows_registry::{Key, LOCAL_MACHINE, Type, Value as RegistryValue};
 
 use super::errors::{PolicyReadError, PolicyWriteError};
+use super::target::{InvalidCustomBrowserId, validate_segments};
 use super::writer::{PolicyWrite, PolicyWriteResult, write_file_atomically};
-use super::{BrowserPolicy, PolicyLocation, PolicyReadResult, PolicySet, PolicyValue};
-use crate::chromium::Browser;
+use super::{
+    BrowserPolicy,
+    PolicyLocation,
+    PolicyReadResult,
+    PolicySet,
+    PolicyTarget,
+    PolicyValue,
+};
 
 // HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND/PATH_NOT_FOUND); see:
 // https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/0c0bcf55-277e-4120-b5dc-f6115fc8dc38
 const HRESULT_FROM_WIN32_FILE_NOT_FOUND: i32 = -2147024894;
 const HRESULT_FROM_WIN32_PATH_NOT_FOUND: i32 = -2147024893;
+const POLICIES_ROOT: &str = r"SOFTWARE\Policies";
+const BUILTIN_IDS: [&str; 4] = [
+    r"BraveSoftware\Brave",
+    r"Google\Chrome",
+    r"Microsoft\Edge",
+    "YandexBrowser",
+];
 
-pub fn read(browser: Browser) -> PolicyReadResult {
-    let root_key = policy_root_path(browser);
-    let source = registry_location(root_key);
-    read_policy(browser, root_key, source)
+pub(super) const CUSTOM_ID_HINT: &str =
+    r"Registry key under HKLM\SOFTWARE\Policies, e.g. Chromium or Vendor\Browser";
+
+pub fn read(target: &PolicyTarget) -> PolicyReadResult {
+    let root_key = policy_root_path(target);
+    let source = registry_location(&root_key);
+    read_policy(target, &root_key, source)
 }
 
-pub fn write(browser: Browser, policies: &PolicySet) -> PolicyWriteResult {
-    let root_key = policy_root_path(browser);
-    replace_registry_policy(root_key, policies)?;
+pub fn write(target: &PolicyTarget, policies: &PolicySet) -> PolicyWriteResult {
+    let root_key = policy_root_path(target);
+    replace_registry_policy(&root_key, policies)?;
 
     Ok(PolicyWrite {
-        target: registry_location(root_key),
+        target: registry_location(&root_key),
         policy_count: policies.len(),
     })
 }
 
-pub fn export(browser: Browser, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
-    let contents = registry_file_contents(browser, policies)?;
+pub fn export(target: &PolicyTarget, policies: &PolicySet, path: &Path) -> PolicyWriteResult {
+    let contents = registry_file_contents(target, policies)?;
     let contents = registry_file_bytes(&contents);
     write_file_atomically(path, &contents)?;
 
@@ -45,21 +63,47 @@ pub fn export_file_extension() -> &'static str {
     "reg"
 }
 
-pub fn uninstall(browser: Browser) -> PolicyWriteResult {
-    let root_key = policy_root_path(browser);
-    remove_registry_policy(root_key)?;
+pub fn uninstall(target: &PolicyTarget) -> PolicyWriteResult {
+    let root_key = policy_root_path(target);
+    remove_registry_policy(&root_key)?;
 
     Ok(PolicyWrite {
-        target: registry_location(root_key),
+        target: registry_location(&root_key),
         policy_count: 0,
     })
 }
 
-pub fn managed_location(browser: Browser) -> PolicyLocation {
-    registry_location(policy_root_path(browser))
+pub fn managed_location(target: &PolicyTarget) -> PolicyLocation {
+    registry_location(&policy_root_path(target))
 }
 
-fn read_policy(browser: Browser, root_key: &str, source: PolicyLocation) -> PolicyReadResult {
+/// A custom key must not overlap a built-in browser's key: uninstall removes the whole key tree,
+/// so `Microsoft` would take Edge's policies with it, and `Google\Chrome\X` would write into
+/// Chrome's.
+pub(super) fn validate_custom_id(id: &str) -> Result<(), InvalidCustomBrowserId> {
+    validate_segments(id, '\\', |character| {
+        character.is_ascii_alphanumeric() || matches!(character, ' ' | '-' | '_' | '.')
+    })?;
+    let overlaps = BUILTIN_IDS
+        .iter()
+        .any(|builtin| is_key_prefix(id, builtin) || is_key_prefix(builtin, id));
+    if overlaps {
+        return Err(InvalidCustomBrowserId(
+            "identifier overlaps a built-in browser's key",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Whether `prefix` is `path` or one of its ancestor keys, ignoring ASCII case like the registry.
+fn is_key_prefix(prefix: &str, path: &str) -> bool {
+    path.get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+        && matches!(path.as_bytes().get(prefix.len()), None | Some(b'\\'))
+}
+
+fn read_policy(target: &PolicyTarget, root_key: &str, source: PolicyLocation) -> PolicyReadResult {
     let policies = match query_registry_policy(root_key) {
         Ok(Some(policies)) => policies,
         Ok(None) => return Ok(None),
@@ -70,7 +114,7 @@ fn read_policy(browser: Browser, root_key: &str, source: PolicyLocation) -> Poli
         Ok(None)
     } else {
         Ok(Some(BrowserPolicy {
-            browser,
+            browser: target.browser(),
             source,
             policies,
         }))
@@ -252,10 +296,10 @@ fn set_registry_u32(key: &Key, name: &str, value: u32) -> Result<(), PolicyWrite
 }
 
 fn registry_file_contents(
-    browser: Browser,
+    target: &PolicyTarget,
     policies: &PolicySet,
 ) -> Result<String, PolicyWriteError> {
-    let root_key = registry_file_root_path(browser);
+    let root_key = registry_file_root_path(target);
     let mut lines = vec![
         "Windows Registry Editor Version 5.00".to_owned(),
         String::new(),
@@ -377,8 +421,8 @@ fn registry_list_item(policy: &str, value: &PolicyValue) -> Result<String, Polic
     }
 }
 
-fn registry_file_root_path(browser: Browser) -> String {
-    format!(r"HKEY_LOCAL_MACHINE\{}", policy_root_path(browser))
+fn registry_file_root_path(target: &PolicyTarget) -> String {
+    format!(r"HKEY_LOCAL_MACHINE\{}", policy_root_path(target))
 }
 
 fn policy_name(parent: &str, name: &str) -> String {
@@ -403,12 +447,13 @@ fn escape_registry_string(value: &str) -> String {
     escaped
 }
 
-fn policy_root_path(browser: Browser) -> &'static str {
-    match browser {
-        Browser::Brave => r"SOFTWARE\Policies\BraveSoftware\Brave",
-        Browser::Chrome => r"SOFTWARE\Policies\Google\Chrome",
-        Browser::Edge => r"SOFTWARE\Policies\Microsoft\Edge",
-        Browser::Yandex => r"SOFTWARE\Policies\YandexBrowser",
+fn policy_root_path(target: &PolicyTarget) -> Cow<'static, str> {
+    match target {
+        PolicyTarget::Brave => Cow::Borrowed(r"SOFTWARE\Policies\BraveSoftware\Brave"),
+        PolicyTarget::Chrome => Cow::Borrowed(r"SOFTWARE\Policies\Google\Chrome"),
+        PolicyTarget::Edge => Cow::Borrowed(r"SOFTWARE\Policies\Microsoft\Edge"),
+        PolicyTarget::Yandex => Cow::Borrowed(r"SOFTWARE\Policies\YandexBrowser"),
+        PolicyTarget::Custom(id) => Cow::Owned(format!(r"{POLICIES_ROOT}\{id}")),
     }
 }
 
@@ -583,6 +628,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn custom_keys_must_not_overlap_builtin_browser_keys() {
+        assert!(validate_custom_id("Chromium").is_ok());
+        assert!(validate_custom_id(r"Vendor\Browser").is_ok());
+        assert!(validate_custom_id("Google").is_err());
+        assert!(validate_custom_id("microsoft").is_err());
+        assert!(validate_custom_id(r"Google\Chrome").is_err());
+        assert!(validate_custom_id(r"google\chrome\Nested").is_err());
+    }
+
+    #[test]
     fn registry_numbered_list_sorts_by_numeric_value_name() {
         let mut values = PolicySet::new();
         values.insert("10".to_owned(), string("ten"));
@@ -617,7 +672,7 @@ mod tests {
             PolicyValue::List(vec![string("abc;https://example.com/update.xml")]),
         );
 
-        let contents = registry_file_contents(Browser::Chrome, &policies)?;
+        let contents = registry_file_contents(&PolicyTarget::Chrome, &policies)?;
 
         assert!(contents.contains(
             "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist]"

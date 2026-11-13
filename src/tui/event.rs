@@ -168,6 +168,9 @@ fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput, area: Rect) ->
     if dialog.kind == DialogKind::Help {
         return help_key_to_action(key_event, area);
     }
+    if dialog.kind == DialogKind::IdentifyBrowser {
+        return identify_key_to_action(key_event);
+    }
 
     match key_event.code {
         KeyCode::Esc => Action::CloseDialog,
@@ -207,6 +210,16 @@ fn dialog_key_to_action(key_event: KeyEvent, dialog: DialogInput, area: Rect) ->
         KeyCode::Char('o') if dialog.kind == DialogKind::ElevatedPermissionsRequired => {
             Action::CloseDialog
         }
+        _ => Action::Noop,
+    }
+}
+
+fn identify_key_to_action(key_event: KeyEvent) -> Action {
+    match key_event.code {
+        KeyCode::Esc => Action::CloseDialog,
+        KeyCode::Enter => Action::ActivateDialogButton,
+        KeyCode::Backspace => Action::BackspaceDialogInput,
+        KeyCode::Char(character) => Action::InputDialog(character),
         _ => Action::Noop,
     }
 }

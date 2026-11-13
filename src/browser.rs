@@ -2,7 +2,14 @@ use std::path::Path;
 
 use crate::chromium::Browser;
 use crate::chromium::detection::{BrowserDetectionResult, BrowserInstall};
-use crate::chromium::policy::{self, BrowserPolicy, PolicyReadResult, PolicySet, PolicyValue};
+use crate::chromium::policy::{
+    self,
+    BrowserPolicy,
+    PolicyReadResult,
+    PolicySet,
+    PolicyTarget,
+    PolicyValue,
+};
 use crate::diff::DiffCounts;
 use crate::manifest::Manifest;
 use crate::policy_stage::PolicyStage;
@@ -13,6 +20,8 @@ use crate::watcher::ManagedPolicyWatcher;
 #[derive(Debug)]
 pub struct BrowserState {
     pub browser: Browser,
+    /// Where policies are read and written; `None` until a custom Chromium browser is identified.
+    target: Option<PolicyTarget>,
     pub install: Option<BrowserInstall>,
     pub install_error: Option<String>,
     pub policy: Option<BrowserPolicy>,
@@ -45,12 +54,13 @@ pub enum UninstallResult {
 
 impl BrowserState {
     pub fn new(
-        browser: Browser,
+        target: PolicyTarget,
         install: BrowserDetectionResult,
         policy: PolicyReadResult,
         manifest: &Manifest,
         preset: PolicySet,
     ) -> Self {
+        let browser = target.browser();
         let (install, install_error) = match install {
             Ok(install) => (install, None),
             Err(error) => (None, Some(error.to_string())),
@@ -67,7 +77,7 @@ impl BrowserState {
                     (Some(policy), edits, None)
                 }
                 (None, true) => {
-                    let (policy, edits) = missing_policy_with_defaults(manifest, browser, &preset);
+                    let (policy, edits) = missing_policy_with_defaults(manifest, &target, &preset);
                     (Some(policy), edits, Some(preset))
                 }
                 (None, false) => (
@@ -79,6 +89,7 @@ impl BrowserState {
 
         Self {
             browser,
+            target: Some(target),
             install,
             install_error,
             policy,
@@ -92,6 +103,44 @@ impl BrowserState {
             edits,
             first_missing_current,
         }
+    }
+
+    /// A browser without a known policy store yet; it has no policies to show or apply.
+    pub fn unidentified(browser: Browser, manifest: &Manifest) -> Self {
+        Self {
+            browser,
+            target: None,
+            install: None,
+            install_error: None,
+            policy: None,
+            policy_error: None,
+            managed_policy_exists: false,
+            awaiting_install: false,
+            awaiting_uninstall: false,
+            policy_tree_version: 0,
+            #[cfg(target_os = "macos")]
+            managed_policy_watcher: None,
+            edits: PolicyStage::new(manifest, browser, &PolicySet::new()),
+            first_missing_current: None,
+        }
+    }
+
+    /// Points this browser at `target`, replacing everything loaded for the previous target.
+    pub fn identify(
+        &mut self,
+        target: PolicyTarget,
+        policy: PolicyReadResult,
+        manifest: &Manifest,
+        preset: PolicySet,
+    ) {
+        // Policy tree caches are keyed by browser and version, so the version must keep moving.
+        let version = self.policy_tree_version.wrapping_add(1);
+        *self = Self::new(target, Ok(None), policy, manifest, preset);
+        self.policy_tree_version = version;
+    }
+
+    pub const fn target(&self) -> Option<&PolicyTarget> {
+        self.target.as_ref()
     }
 
     pub const fn detected(&self) -> bool {
@@ -201,7 +250,8 @@ impl BrowserState {
             return Ok(ApplyResult::NoChanges);
         }
 
-        let write = policy::write(self.browser, &current).map_err(|error| error.to_string())?;
+        let write =
+            policy::write(self.require_target()?, &current).map_err(|error| error.to_string())?;
         if should_wait_for_managed_policy_install() {
             self.watch_managed_policy()?;
         }
@@ -239,7 +289,7 @@ impl BrowserState {
         }
 
         let current = self.edits.materialize();
-        policy::export(self.browser, &current, path).map_err(|error| error.to_string())
+        policy::export(self.require_target()?, &current, path).map_err(|error| error.to_string())
     }
 
     pub fn refresh_awaiting_policy_change(
@@ -262,13 +312,13 @@ impl BrowserState {
     }
 
     fn refresh_awaiting_install(&mut self, manifest: &Manifest) -> bool {
-        if self.policy.is_none() {
+        let (Some(target), Some(_)) = (&self.target, &self.policy) else {
             self.clear_awaiting_policy_change();
             return true;
-        }
+        };
         let expected = self.edits.materialize();
 
-        match policy::read(self.browser) {
+        match policy::read(target) {
             Ok(Some(updated)) if updated.policies == expected => {
                 let edits = PolicyStage::new(manifest, self.browser, &updated.policies);
                 self.policy = Some(updated);
@@ -302,7 +352,12 @@ impl BrowserState {
     }
 
     fn refresh_awaiting_uninstall(&mut self, manifest: &Manifest, preset: PolicySet) -> bool {
-        match policy::read(self.browser) {
+        let Some(target) = &self.target else {
+            self.clear_awaiting_policy_change();
+            return true;
+        };
+
+        match policy::read(target) {
             Ok(None) => {
                 self.use_missing_policy_defaults(manifest, preset);
                 true
@@ -333,7 +388,7 @@ impl BrowserState {
             return Ok(UninstallResult::NoPolicy);
         }
 
-        policy::uninstall(self.browser).map_err(|error| error.to_string())?;
+        policy::uninstall(self.require_target()?).map_err(|error| error.to_string())?;
 
         Ok(UninstallResult::Uninstalled)
     }
@@ -361,7 +416,10 @@ impl BrowserState {
     }
 
     pub fn use_missing_policy_defaults(&mut self, manifest: &Manifest, preset: PolicySet) {
-        let (policy, edits) = missing_policy_with_defaults(manifest, self.browser, &preset);
+        let Some(target) = &self.target else {
+            return;
+        };
+        let (policy, edits) = missing_policy_with_defaults(manifest, target, &preset);
         self.policy = Some(policy);
         self.policy_error = None;
         self.managed_policy_exists = false;
@@ -517,20 +575,27 @@ impl BrowserState {
             Ok(())
         }
     }
+
+    fn require_target(&self) -> Result<&PolicyTarget, String> {
+        self.target
+            .as_ref()
+            .ok_or_else(|| "enter a browser identifier first".to_owned())
+    }
 }
 
 fn missing_policy_with_defaults(
     manifest: &Manifest,
-    browser: Browser,
+    target: &PolicyTarget,
     preset: &PolicySet,
 ) -> (BrowserPolicy, PolicyStage) {
+    let browser = target.browser();
     let baseline = PolicySet::new();
     let edits = PolicyStage::with_current(manifest, browser, &baseline, preset);
 
     (
         BrowserPolicy {
             browser,
-            source: policy::managed_location(browser),
+            source: policy::managed_location(target),
             policies: baseline,
         },
         edits,

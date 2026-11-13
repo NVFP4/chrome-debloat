@@ -9,7 +9,7 @@ use super::ui_dialog::{self, DialogLayout, DialogRender};
 use super::ui_text::{blank, join_lines};
 use crate::app::{App, DialogState};
 
-pub const HELP_LINE_COUNT: u16 = 30;
+pub const HELP_LINE_COUNT: u16 = 31;
 const LAYOUT: DialogLayout = DialogLayout {
     width_percent: 80,
     min_width: 48,
@@ -64,6 +64,7 @@ fn help_text() -> Text<'static> {
             binding_line("        k ↑", "move up"),
             binding_line("        [ ]", "jump between groups"),
             binding_line("        1-9", "jump to tab number"),
+            binding_line("          5", "pick any Chromium browser by identifier"),
             Line::default(),
             header_line("Global Actions"),
             binding_line("          a", "Apply changes"),
